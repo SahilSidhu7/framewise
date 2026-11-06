@@ -21,7 +21,7 @@ from ..imaging.ops import OPS
 from ..imaging.recipes import load_recipes
 
 AI_OPS = [n for n in OPS if n not in ("lut",)]
-FIX_OPS = ("adjust", "straighten", "sharpen", "denoise", "dehaze", "curves", "hsl")
+FIX_OPS = ("adjust", "white_balance", "straighten", "sharpen", "denoise", "dehaze", "curves", "hsl")
 
 
 def _lit(s: str) -> str:

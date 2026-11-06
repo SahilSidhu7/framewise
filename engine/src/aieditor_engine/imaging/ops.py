@@ -369,6 +369,25 @@ def denoise(img: np.ndarray, p: DenoiseParams, ctx: RenderContext) -> np.ndarray
     return cv2.bilateralFilter(np.ascontiguousarray(img, dtype=np.float32), d, p.strength / 100 * 0.12, d * 2.0)
 
 
+class WhiteBalanceParams(BaseModel):
+    amount: float = Field(1.0, ge=0, le=1, description="0 = off, 1 = fully neutral")
+
+
+@op("white_balance", WhiteBalanceParams, "linear", "Auto white balance: remove a color cast (gray-world on mid-tones).", "tone", ("amount",))
+def white_balance(img: np.ndarray, p: WhiteBalanceParams, ctx: RenderContext) -> np.ndarray:
+    small = img[:: max(1, img.shape[0] // 256), :: max(1, img.shape[1] // 256)].reshape(-1, 3)
+    lum = small @ LUMA
+    lo, hi = np.percentile(lum, [10, 95])
+    mid = small[(lum > lo) & (lum < hi)]
+    if mid.size < 30:
+        return img
+    means = mid.mean(axis=0)
+    gains = means.mean() / np.maximum(means, 1e-6)
+    gains = np.clip(gains / (gains @ LUMA), 0.4, 2.5)  # keep brightness
+    gains = 1 + (gains - 1) * p.amount
+    return img * gains.astype(np.float32)
+
+
 class DehazeParams(BaseModel):
     amount: float = Field(30, ge=-100, le=100)
 

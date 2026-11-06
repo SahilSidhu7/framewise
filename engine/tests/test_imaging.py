@@ -228,7 +228,7 @@ def test_preview_matches_export_look(tmp_path: Path, photo_path: Path) -> None:
 
 def test_analyze_notes(scene: np.ndarray) -> None:
     dark = analyze(scene * 0.08)
-    assert "underexposed" in dark["notes"]
+    assert any(n.startswith("underexposed") for n in dark["notes"])
     a = analyze(cv2.resize(scene, None, fx=1.5, fy=1.5))
     assert a["orientation"] == "landscape"
     assert any("tilted" in n for n in a["notes"])

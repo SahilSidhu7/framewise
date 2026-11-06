@@ -249,15 +249,20 @@ def analyze(img_linear: np.ndarray) -> dict[str, Any]:
     ]
 
     notes = []
-    if p50 < 0.28:
-        notes.append("underexposed")
-    elif p50 > 0.72:
+    clipped = float((lum > 0.985).mean())
+    # suggested exposure: bring the brightest tones (p99) up to ~0.9 display, in linear stops
+    ev_fix = float(np.log2(srgb_to_linear(np.float32(0.9)) / max(float(srgb_to_linear(np.float32(max(p99, 0.02)))), 1e-4)))
+    if p50 < 0.28 or p99 < 0.68:
+        notes.append(f"underexposed (try exposure +{min(2.0, max(0.3, ev_fix)):.1f})")
+    elif clipped > 0.02 or (p50 > 0.82 and p1 > 0.3):
         notes.append("overexposed")
-    if float((lum > 0.985).mean()) > 0.02:
+    elif p50 > 0.68:
+        notes.append("bright / high-key (keep it bright)")
+    if clipped > 0.02:
         notes.append("clipped highlights")
     if float((lum < 0.015).mean()) > 0.05:
         notes.append("crushed shadows")
-    if p99 - p1 < 0.45:
+    if p99 - p1 < 0.45 and p50 <= 0.68:
         notes.append("flat / low contrast")
     elif p99 - p1 > 0.95:
         notes.append("high contrast")
@@ -265,10 +270,11 @@ def analyze(img_linear: np.ndarray) -> dict[str, Any]:
         notes.append("nearly monochrome")
     elif float(sat.mean()) > 0.35:
         notes.append("very saturated")
+    temp_fix = int(round(min(40, max(8, abs(warmth) * 130))))
     if warmth > 0.08:
-        notes.append("warm cast")
+        notes.append(f"warm cast (try temperature -{temp_fix})")
     elif warmth < -0.08:
-        notes.append("cool cast")
+        notes.append(f"cool cast (try temperature +{temp_fix})")
     if abs(tint) > 0.05:
         notes.append("green cast" if tint > 0 else "magenta cast")
     if sharpness < 60:

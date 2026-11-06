@@ -38,7 +38,7 @@ class Variation:
 # ---------------------------------------------------------------- prompting
 
 PLAYBOOK = """Editing rules:
-- Correct problems first (exposure, white balance, tilt), then apply a look.
+- Correct problems first (exposure, white balance, tilt), then apply a look. A color cast is fixed with `white_balance`.
 - Prefer ONE look that matches the mood; tune it with s= (0.5 subtle, 1 normal, 1.3 strong).
 - Protect highlights and skin: don't push exposure, saturation or contrast to extremes.
 - Grain, vignette, bloom: subtle values (0.1-0.4) look professional.
@@ -56,7 +56,7 @@ EXAMPLES = [
     ),
     (
         "brighten it up and make it aesthetic",
-        f"notes: underexposed\nhints: allowed looks: aesthetic_soft, pastel; {_NO_CROP}; suggested look strength s=1",
+        f"notes: underexposed (try exposure +0.7)\nhints: allowed looks: aesthetic_soft, pastel; {_NO_CROP}; suggested look strength s=1",
         "# dark photo -> lift exposure first, then soft airy look\nadjust exposure=0.7 shadows=25\nlook aesthetic_soft s=0.9",
     ),
     (
@@ -66,7 +66,7 @@ EXAMPLES = [
     ),
     (
         "fix it",
-        "notes: cool cast, flat / low contrast\nhints: no look: use adjustments/effects only; " + _NO_CROP + "; task: correction only",
+        "notes: cool cast (try temperature +12), flat / low contrast\nhints: no look: use adjustments/effects only; " + _NO_CROP + "; task: correction only",
         "# remove the blue cast and add some contrast\nadjust temperature=12 contrast=15 vibrance=10",
     ),
     (
@@ -178,7 +178,7 @@ class Hints:
 
 
 # Always available to the model; anything else only when the user names it.
-SAFE_OPS = ("adjust", "sharpen", "denoise", "dehaze")
+SAFE_OPS = ("adjust", "white_balance", "sharpen", "denoise", "dehaze")
 OP_WORDS = {
     "straighten": r"\b(straight\w*|level|tilt\w*|crooked)\b",
     "grain": r"\b(grain\w*|filmic|noise texture)\b",
@@ -231,7 +231,7 @@ SAFE_LOOKS = ("vivid_pop", "bright_airy", "film_portra", "golden_hour", "aesthet
 
 
 # Edit Linter for model output: playbook rules as hard checks.
-SAFE_ADJUST = {"exposure": 1.2, "contrast": 40, "highlights": 60, "shadows": 60, "whites": 40, "blacks": 40,
+SAFE_ADJUST = {"exposure": 2.0, "contrast": 40, "highlights": 60, "shadows": 60, "whites": 40, "blacks": 40,
                "temperature": 35, "tint": 25, "vibrance": 40, "saturation": 40, "clarity": 40}
 
 
@@ -281,7 +281,7 @@ def sanitize(ops: list[dict[str, Any]], analysis: dict[str, Any], hints: Hints) 
         seen_ops.add(name)
         out.append({"op": name, "params": params})
     # corrections first, look next, finishing effects last
-    order = {"straighten": 0, "rotate": 0, "flip": 0, "denoise": 1, "dehaze": 1, "adjust": 2, "look": 3, "crop": 9}
+    order = {"straighten": 0, "rotate": 0, "flip": 0, "white_balance": 1, "denoise": 1, "dehaze": 1, "adjust": 2, "look": 3, "crop": 9}
     out.sort(key=lambda o: order.get(o["op"], 5))
     return out, fixed
 
@@ -321,6 +321,17 @@ def _plan_llm(prompt: str, brief: str, hints: Hints, analysis: dict[str, Any], n
         warnings += fixes
         # The user named an effect but the model skipped it: add a sensible default.
         present = {o["op"] for o in ops}
+        notes = " ".join(analysis.get("notes", []))
+        if re.search(r"(warm|cool|green|magenta) cast", notes) and hints.fix_only and "white_balance" not in present:
+            ops.insert(0, {"op": "white_balance", "params": {"amount": 0.85}})
+            for o in ops:
+                if o["op"] == "adjust":
+                    o["params"].pop("temperature", None)
+                    o["params"].pop("tint", None)
+            warnings.append("added white_balance (color cast)")
+        if "tilted horizon" in notes and "straighten" not in present and re.search(FIX_WORDS, hints.text):
+            ops.insert(0, {"op": "straighten", "params": {}})  # playbook: correct first
+            warnings.append("added straighten (tilted horizon)")
         for pattern, stmt in EXTRA_OPS:
             op_name = stmt.split()[0]
             if op_name not in present and wants(pattern, hints.text):
@@ -416,16 +427,15 @@ def plan_rules(prompt: str, analysis: dict[str, Any], current_program: str = "",
         fixes.append("straighten")
     if wants_fix:
         adj = {}
-        if "underexposed" in notes:
-            adj["exposure"], adj["shadows"] = 0.6, 20
+        under = re.search(r"underexposed(?: \(try exposure \+([\d.]+)\))?", notes)
+        if under:
+            adj["exposure"], adj["shadows"] = float(under.group(1) or 0.6), 20
         if "overexposed" in notes or "clipped highlights" in notes:
             adj["exposure"], adj["highlights"] = -0.4, -30
         if "flat / low contrast" in notes:
             adj["contrast"] = 15
-        if "warm cast" in notes:
-            adj["temperature"] = -12
-        if "cool cast" in notes:
-            adj["temperature"] = 12
+        if re.search(r"(warm|cool|green|magenta) cast", notes):
+            fixes.insert(0, "white_balance 0.85")
         if "soft / blurry" in notes:
             fixes.append("sharpen amount=35")
         if adj:
