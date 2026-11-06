@@ -1,0 +1,99 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  engine:
+    name: Engine tests (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest, ubuntu-latest]
+    defaults:
+      run:
+        working-directory: engine
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - run: uv sync --python 3.13
+      - run: uv run pytest -q
+
+  frontend:
+    name: Frontend typecheck + build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: app
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+      - run: npm ci
+      - run: npm run build
+
+  package:
+    name: Package (${{ matrix.os }})
+    needs: [engine, frontend]
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest, ubuntu-22.04]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: app/src-tauri
+      - name: Linux system deps
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+      - name: Freeze engine sidecar
+        working-directory: engine
+        run: |
+          uv sync --python 3.13 --group build
+          uv run python scripts/build_sidecar.py
+      - name: Sidecar smoke test (prints ready line)
+        shell: bash
+        run: |
+          bin=$(ls app/src-tauri/binaries/aieditor-engine-*)
+          "$bin" --port 0 > ready.txt 2> engine.log &
+          pid=$!
+          for i in $(seq 1 60); do grep -q ready ready.txt && break; sleep 1; done
+          kill "$pid" || true
+          cat ready.txt
+          grep -q '"event": "ready"' ready.txt || { cat engine.log; exit 1; }
+      - name: Build app bundle
+        working-directory: app
+        run: |
+          npm ci
+          npx tauri build --config src-tauri/tauri.bundle.conf.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: aieditor-${{ matrix.os }}
+          path: |
+            app/src-tauri/target/release/bundle/**/*.msi
+            app/src-tauri/target/release/bundle/**/*.exe
+            app/src-tauri/target/release/bundle/**/*.dmg
+            app/src-tauri/target/release/bundle/**/*.AppImage
+            app/src-tauri/target/release/bundle/**/*.deb
+          if-no-files-found: warn

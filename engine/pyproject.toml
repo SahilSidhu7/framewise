@@ -1,0 +1,35 @@
+[project]
+name = "aieditor-engine"
+version = "0.1.0"
+description = "AIEditor engine: project model, command bus, media pipeline, local API"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.30",
+    "pydantic>=2.8",
+    "av>=13.0",
+    "pillow>=10.4",
+    "numpy>=2.0",
+]
+
+[project.scripts]
+aieditor-engine = "aieditor_engine.__main__:main"
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3",
+    "httpx>=0.27",
+]
+build = [
+    "pyinstaller>=6.10",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/aieditor_engine"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

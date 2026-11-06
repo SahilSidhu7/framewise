@@ -1,0 +1,29 @@
+# Python
+engine/.venv/
+engine/build/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Node / frontend
+app/node_modules/
+app/dist/
+
+# Tauri / Rust
+app/src-tauri/target/
+app/src-tauri/gen/
+app/src-tauri/binaries/
+
+# Secrets (NVIDIA API key etc. for training only)
+.env
+.env.*
+
+# Training artifacts and models (large; downloaded or produced locally)
+training/data/
+training/runs/
+models/
+
+# OS
+.DS_Store
+Thumbs.db
+*.tsbuildinfo
