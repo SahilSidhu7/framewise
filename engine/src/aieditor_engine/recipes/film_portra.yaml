@@ -1,0 +1,35 @@
+title: Portrait film
+description: 'Warm natural skin, soft contrast, muted greens: classic portrait film
+  stock feel.'
+tags:
+- film
+- portrait
+- natural
+- warm
+- skin
+- analog
+steps:
+- adjust:
+    contrast: -5
+    highlights: -15
+    shadows: 10
+    temperature: 8
+    vibrance: 5
+    saturation: -5
+- hsl:
+    band: green
+    hue: 20
+    sat: -30
+- hsl:
+    band: orange
+    sat: 5
+    lum: 5
+- color_grade:
+    highlights_hue: 40
+    highlights_sat: 12
+    shadows_hue: 200
+    shadows_sat: 8
+- fade:
+    amount: 0.12
+- grain:
+    amount: 0.2

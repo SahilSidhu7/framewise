@@ -1,0 +1,30 @@
+title: Cinematic teal & orange
+description: 'Blockbuster movie grade: teal shadows, warm skin and highlights, punchy
+  contrast.'
+tags:
+- cinematic
+- movie
+- film
+- blockbuster
+- teal
+- orange
+- dramatic
+steps:
+- adjust:
+    contrast: 20
+    highlights: -20
+    shadows: -5
+    saturation: -5
+- color_grade:
+    shadows_hue: 195
+    shadows_sat: 45
+    highlights_hue: 32
+    highlights_sat: 35
+- hsl:
+    band: orange
+    sat: 10
+- hsl:
+    band: blue
+    hue: -20
+- vignette:
+    amount: 0.25

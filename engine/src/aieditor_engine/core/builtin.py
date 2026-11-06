@@ -75,6 +75,7 @@ def media_remove(p: Project, a: MediaRemoveParams) -> dict:
     if a.media_id not in p.media:
         raise CommandError(f"media not found: {a.media_id}")
     del p.media[a.media_id]
+    p.edits.pop(a.media_id, None)
     removed = 0
     for track in p.tracks:
         before = len(track.clips)

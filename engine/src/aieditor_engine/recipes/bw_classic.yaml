@@ -1,0 +1,16 @@
+title: Classic B&W
+description: Clean, balanced black and white.
+tags:
+- black and white
+- monochrome
+- classic
+- timeless
+- bw
+steps:
+- black_white:
+    amount: 1.0
+- adjust:
+    contrast: 20
+    clarity: 10
+- grain:
+    amount: 0.15

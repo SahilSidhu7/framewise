@@ -7,10 +7,11 @@ from concurrent.futures import Future, ThreadPoolExecutor
 from pathlib import Path
 from typing import Any
 
-from .core import builtin  # noqa: F401  (registers built-in commands)
+from .core import builtin, photo_commands  # noqa: F401  (register commands)
 from .core.bus import CommandBus, Source
 from .core.project import MediaKind, Project, ProjectKind, ProxyStatus
 from .core.store import ProjectPaths, create_project, load_project, save_project
+from .imaging.render import SOURCES, analyze
 from .media.probe import ProbeError, make_thumbnail, probe
 from .media.proxy import ProxyError, make_proxy
 
@@ -25,6 +26,7 @@ class Session:
         self.bus.subscribe(self._autosave)
         self._jobs = ThreadPoolExecutor(max_workers=proxy_workers, thread_name_prefix="proxy")
         self._pending: list[Future] = []
+        self._analysis: dict[str, dict[str, Any]] = {}
 
     # ----------------------------------------------------------- lifecycle
     @classmethod
@@ -70,6 +72,23 @@ class Session:
             if info["kind"] == MediaKind.VIDEO:
                 self._queue_proxy(media_id)
         return {"imported": imported, "failed": failed}
+
+    # --------------------------------------------------------------- photo
+    def photo_stack(self, media_id: str) -> tuple[Path, list[dict[str, Any]]]:
+        """Source path + a JSON copy of the edit stack (safe to use off-lock)."""
+        with self.bus.lock:
+            item = self.bus.project.media.get(media_id)
+            if item is None or item.kind != MediaKind.IMAGE:
+                raise KeyError(f"photo not found: {media_id}")
+            stack = [o.model_dump(mode="json") for o in self.bus.project.edits.get(media_id, [])]
+        return Path(item.path), stack
+
+    def analysis(self, media_id: str) -> dict[str, Any]:
+        """L1 measurements of the *original* photo, cached per media."""
+        if media_id not in self._analysis:
+            path, _ = self.photo_stack(media_id)
+            self._analysis[media_id] = analyze(SOURCES.get(path, 1024))
+        return self._analysis[media_id]
 
     # ---------------------------------------------------------------- jobs
     def _make_thumb(self, media_id: str) -> None:

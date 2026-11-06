@@ -1,0 +1,20 @@
+title: Faded film
+description: Washed-out matte film with cool shadows.
+tags:
+- faded
+- matte
+- film
+- indie
+- washed
+steps:
+- adjust:
+    contrast: -10
+    saturation: -20
+    temperature: 5
+- fade:
+    amount: 0.4
+- color_grade:
+    shadows_hue: 190
+    shadows_sat: 20
+- grain:
+    amount: 0.25

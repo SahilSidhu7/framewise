@@ -1,0 +1,23 @@
+title: Moody dark
+description: Dark, cool, desaturated and atmospheric.
+tags:
+- moody
+- dark
+- cold
+- atmospheric
+- sad
+- dramatic
+steps:
+- adjust:
+    exposure: -0.3
+    contrast: 20
+    highlights: -40
+    shadows: -10
+    saturation: -25
+    temperature: -10
+    clarity: 15
+- color_grade:
+    shadows_hue: 210
+    shadows_sat: 25
+- vignette:
+    amount: 0.45

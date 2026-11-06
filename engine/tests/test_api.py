@@ -84,5 +84,51 @@ def test_full_flow(client: TestClient, tmp_path: Path, image_file: Path, video_f
     assert (root / "logs" / "trajectory.jsonl").read_text().count("\n") >= 4
 
 
+def test_photo_editing_flow(client: TestClient, tmp_path: Path, image_file: Path) -> None:
+    client.post("/projects", headers=H, json={"path": str(tmp_path / "p"), "name": "Photos", "kind": "photo"})
+    media_id = client.post("/media/import", headers=H, json={"paths": [str(image_file)]}).json()["imported"][0]
+
+    assert any(o["name"] == "adjust" for o in client.get("/ops", headers=H).json())
+    assert len(client.get("/looks", headers=H).json()) >= 15
+
+    r = client.post("/commands/photo.apply_look", headers=H, json={"params": {"media_id": media_id, "name": "noir", "strength": 0.8}})
+    assert r.status_code == 200, r.text
+    r = client.post(
+        "/commands/photo.apply_program", headers=H,
+        json={"params": {"media_id": media_id, "program": "look vintage_70s s=0.6\nvignette 0.3", "mode": "replace"}, "source": "ai"},
+    )
+    assert r.status_code == 200, r.text
+    assert client.get(f"/media/{media_id}/dsl", headers=H).json()["program"] == "look vintage_70s s=0.6\nvignette 0.3"
+
+    bad = client.post("/commands/photo.apply_program", headers=H, json={"params": {"media_id": media_id, "program": "sparkle 1"}})
+    assert bad.status_code == 422 and "unknown op" in bad.json()["detail"]
+
+    for q in ("", "&bypass=1", "&look=noir&s=0.5"):
+        r = client.get(f"/media/{media_id}/render?token={TOKEN}&max=256{q}")
+        assert r.status_code == 200 and r.headers["content-type"] == "image/jpeg"
+
+    r = client.post(f"/media/{media_id}/preview", headers=H, json={"ops": [{"op": "adjust", "params": {"exposure": 1}}], "max": 200})
+    assert r.status_code == 200 and r.content[:2] == bytes([0xFF, 0xD8])
+    bad = client.post(f"/media/{media_id}/preview", headers=H, json={"ops": [{"op": "adjust", "params": {"exposure": 99}}]})
+    assert bad.status_code == 422
+    r = client.get(f"/media/{media_id}/render?token={TOKEN}&max=200&program=look%20noir")
+    assert r.status_code == 200
+
+    ai = client.post("/ai/edit", headers=H, json={"media_id": media_id, "prompt": "make it vintage"})
+    assert ai.status_code == 200 and ai.json()["variations"]
+    assert client.get("/ai/status", headers=H).json()["state"] in ("ready", "idle", "not_installed", "error")
+
+    a = client.get(f"/media/{media_id}/analysis", headers=H).json()
+    assert a["size"] == [640, 480] and "notes" in a
+
+    out = client.post(f"/media/{media_id}/export", headers=H, json={"path": str(tmp_path / "export" / "final"), "format": "png"})
+    assert out.status_code == 200, out.text
+    assert Path(out.json()["path"]).suffix == ".png" and Path(out.json()["path"]).is_file()
+
+    assert client.get("/media/nope/render", headers=H).status_code == 404
+    client.post("/undo", headers=H)
+    assert client.get(f"/media/{media_id}/dsl", headers=H).json()["program"] == "look noir s=0.8"
+
+
 def test_open_missing(client: TestClient, tmp_path: Path) -> None:
     assert client.post("/projects/open", headers=H, json={"path": str(tmp_path / "x")}).status_code == 404

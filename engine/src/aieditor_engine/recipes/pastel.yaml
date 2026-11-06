@@ -1,0 +1,21 @@
+title: Pastel
+description: Low contrast, soft pastel colors.
+tags:
+- pastel
+- soft
+- cute
+- light
+- candy
+steps:
+- adjust:
+    exposure: 0.2
+    contrast: -25
+    saturation: -15
+    vibrance: 10
+- fade:
+    amount: 0.3
+- color_grade:
+    shadows_hue: 260
+    shadows_sat: 15
+    highlights_hue: 50
+    highlights_sat: 15

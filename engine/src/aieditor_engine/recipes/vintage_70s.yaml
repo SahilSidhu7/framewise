@@ -1,0 +1,29 @@
+title: Vintage 70s
+description: Warm faded 1970s film print with a light leak.
+tags:
+- vintage
+- retro
+- 70s
+- warm
+- film
+- nostalgic
+steps:
+- adjust:
+    temperature: 25
+    tint: 5
+    saturation: -10
+    contrast: -5
+- color_grade:
+    shadows_hue: 30
+    shadows_sat: 20
+    highlights_hue: 45
+    highlights_sat: 25
+- fade:
+    amount: 0.25
+- light_leak:
+    amount: 0.25
+    position: top-right
+- vignette:
+    amount: 0.3
+- grain:
+    amount: 0.3

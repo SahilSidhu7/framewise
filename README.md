@@ -2,7 +2,39 @@
 
 A local, beginner-first AI photo and video editor. See [PLAN.md](PLAN.md) for the full design and roadmap.
 
-**Status: M0, foundations.** The engine core, the local API, media import with preview proxies, and the desktop shell are done. Editing tools start in M1.
+**Status: working photo editor with local AI (M0 + M1 + first AI milestone).**
+
+- **Photo engine:** a 32-bit float, linear-light pipeline with 23 ops:
+  - tone, color, HSL, curves, split-tone grade, LUTs
+  - sharpen, denoise, dehaze, clarity
+  - grain, vignette, bloom/halation, light leaks, dust, paper texture
+  - crop, rotate, auto-straighten, flip
+
+  Dithered 8/16-bit export to JPEG/PNG/TIFF/WebP. Preview and export use the same code path.
+- **18 looks:** YAML recipes with a strength knob, for example `ancient_sepia`, `teal_orange_cinematic`, `aesthetic_soft`, `vintage_70s` and `noir`.
+- **Edit DSL:** the compact language the AI writes, e.g. `look vintage_70s s=0.7 | grain 0.3 | crop 4:5`.
+- **EditLM v0:** local Qwen3-1.7B through llama.cpp (Vulkan). How it plans:
+  1. A rule layer reads the request and the photo's measurements, then narrows a grammar. The model must answer within it.
+  2. The model writes 3 variations.
+  3. An Edit Linter enforces the playbook rules on what it wrote.
+
+  With no model installed, the rule planner answers alone. Every AI edit is a single undo step.
+- **Beginner UI:**
+  - AI prompt and one-click chips
+  - looks gallery rendered on your photo
+  - live sliders
+  - crop, rotate and straighten
+  - edit list with on/off toggles
+  - before/after
+  - export dialog
+
+## Local AI model setup
+The engine looks in `%LOCALAPPDATA%\AIEditor` (or the `AIEDITOR_LLAMA_SERVER` and `AIEDITOR_MODEL` env vars) for:
+```
+runtime/llama-<build>/llama-server.exe   # llama.cpp release zip, e.g. llama-bXXXXX-bin-win-vulkan-x64.zip
+models/Qwen3-1.7B-Q8_0.gguf              # huggingface.co/Qwen/Qwen3-1.7B-GGUF (Apache-2.0)
+```
+The model starts automatically when the AI tab opens, and runs only on 127.0.0.1.
 
 ## Layout
 ```

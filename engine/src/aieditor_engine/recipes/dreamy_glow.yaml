@@ -1,0 +1,24 @@
+title: Dreamy glow
+description: Soft glowing highlights with a gentle pink tint.
+tags:
+- dreamy
+- glow
+- soft
+- romantic
+- ethereal
+- wedding
+steps:
+- adjust:
+    exposure: 0.15
+    contrast: -20
+    highlights: -10
+    saturation: -5
+- bloom:
+    amount: 0.45
+    threshold: 0.55
+    radius: 50
+- color_grade:
+    highlights_hue: 330
+    highlights_sat: 15
+- fade:
+    amount: 0.15

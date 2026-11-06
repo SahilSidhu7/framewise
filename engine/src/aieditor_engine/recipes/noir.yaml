@@ -1,0 +1,21 @@
+title: Noir
+description: High-contrast black and white with deep blacks, like classic film noir.
+tags:
+- noir
+- black and white
+- dramatic
+- moody
+- classic
+- monochrome
+steps:
+- black_white:
+    amount: 1.0
+    red: 20
+- adjust:
+    contrast: 45
+    blacks: -25
+    clarity: 20
+- vignette:
+    amount: 0.55
+- grain:
+    amount: 0.3

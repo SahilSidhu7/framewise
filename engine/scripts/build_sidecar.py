@@ -39,6 +39,7 @@ def main() -> None:
             "--noconfirm", "--clean", "--onefile",
             "--name", "aieditor-engine",
             "--collect-submodules", "aieditor_engine",
+            "--collect-data", "aieditor_engine",  # looks (recipes/*.yaml)
             "--collect-all", "av",
             str(ENGINE / "scripts" / "sidecar_entry.py"),
         ],

@@ -1,0 +1,23 @@
+title: VHS 90s
+description: 'Lo-fi 90s home video: color fringing, softness, heavy grain.'
+tags:
+- vhs
+- 90s
+- retro
+- lofi
+- glitch
+- camcorder
+steps:
+- adjust:
+    saturation: 15
+    contrast: -10
+    temperature: -5
+- chromatic_aberration:
+    amount: 0.8
+- blur:
+    radius: 1.2
+- fade:
+    amount: 0.2
+- grain:
+    amount: 0.5
+    size: 1.6

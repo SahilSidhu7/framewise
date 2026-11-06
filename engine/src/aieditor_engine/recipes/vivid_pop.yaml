@@ -1,0 +1,19 @@
+title: Vivid pop
+description: Punchy, saturated, crisp and clear.
+tags:
+- vivid
+- pop
+- vibrant
+- colorful
+- punchy
+- crisp
+steps:
+- adjust:
+    vibrance: 35
+    saturation: 10
+    contrast: 15
+    clarity: 15
+- dehaze:
+    amount: 10
+- sharpen:
+    amount: 30

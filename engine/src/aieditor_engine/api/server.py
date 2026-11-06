@@ -10,12 +10,13 @@ from __future__ import annotations
 
 import asyncio
 import secrets
+import threading
 from collections.abc import AsyncIterator, Callable
 from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
-from fastapi import Depends, FastAPI, HTTPException, Query, Request, WebSocket, WebSocketDisconnect
+from fastapi import Depends, FastAPI, HTTPException, Query, Request, Response, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
@@ -23,6 +24,12 @@ from pydantic import BaseModel, Field
 from .. import __version__
 from ..core.commands import CommandError, list_commands
 from ..core.project import ProjectKind
+from ..agent.llm import LLM, LLMUnavailable
+from ..agent.planner import plan
+from ..dsl import DslError, compile_program, to_dsl
+from ..imaging.ops import OPS
+from ..imaging.recipes import load_recipes
+from ..imaging.render import export_image, render_preview
 from ..session import Session
 
 ALLOWED_ORIGINS = [
@@ -51,6 +58,32 @@ class CommandBody(BaseModel):
 
 class ImportBody(BaseModel):
     paths: list[str] = Field(min_length=1)
+
+
+class ExportBody(BaseModel):
+    path: str
+    format: Literal["jpeg", "png", "tiff", "webp"] = "jpeg"
+    quality: int = Field(95, ge=50, le=100)
+    bit_depth: Literal[8, 16] = 8
+    long_edge: int | None = Field(None, ge=64, le=20000)
+
+
+class PreviewBody(BaseModel):
+    ops: list[dict[str, Any]] = Field(default_factory=list, max_length=64)
+    max: int = Field(1200, ge=64, le=4096)
+
+
+class AiEditBody(BaseModel):
+    media_id: str
+    prompt: str = Field(min_length=1, max_length=500)
+    variations: int = Field(3, ge=1, le=4)
+
+
+def _safe_start() -> None:
+    try:
+        LLM.ensure_started()
+    except LLMUnavailable:
+        pass  # status endpoint reports the error
 
 
 class EngineState:
@@ -113,6 +146,12 @@ def create_app(token: str | None = None) -> FastAPI:
             raise HTTPException(401, "bad or missing engine token")
 
     secured = [Depends(auth)]
+
+    @app.exception_handler(KeyError)
+    async def not_found(_: Request, exc: KeyError) -> Response:
+        from fastapi.responses import JSONResponse
+
+        return JSONResponse({"detail": str(exc.args[0]) if exc.args else "not found"}, status_code=404)
 
     # ---------------------------------------------------------------- meta
     @app.get("/health")
@@ -189,6 +228,94 @@ def create_app(token: str | None = None) -> FastAPI:
     @app.get("/media/{media_id}/proxy", dependencies=secured)
     def media_proxy(media_id: str) -> FileResponse:
         return _derived_file(state.require(), media_id, "proxy_path", "video/mp4")
+
+    # --------------------------------------------------------------- photo
+    @app.get("/ops", dependencies=secured)
+    def ops() -> list[dict[str, Any]]:
+        return [spec.schema() for spec in OPS.values()]
+
+    @app.get("/looks", dependencies=secured)
+    def looks() -> list[dict[str, Any]]:
+        return [r.summary() for r in load_recipes().values()]
+
+    @app.get("/media/{media_id}/render", dependencies=secured)
+    def render(
+        media_id: str,
+        max: int = Query(1600, ge=64, le=4096),
+        bypass: bool = False,
+        look: str | None = None,
+        s: float = Query(1.0, ge=0, le=1.5),
+        program: str | None = Query(None, max_length=4000),
+    ) -> Response:
+        """Preview JPEG. bypass=1 -> original (before/after); look=name -> try a look on top;
+        program=<Edit DSL> -> preview an unapplied program (AI variations)."""
+        session = state.require()
+        path, stack = session.photo_stack(media_id)
+        if bypass:
+            stack = []
+        if program is not None:
+            try:
+                stack = compile_program(program)
+            except DslError as exc:
+                raise HTTPException(422, str(exc)) from exc
+        if look:
+            stack = [o for o in stack if o["op"] != "look"] + [{"op": "look", "params": {"name": look, "strength": s}}]
+        try:
+            data = render_preview(path, stack, max_side=max)
+        except (ValueError, OSError) as exc:
+            raise HTTPException(422, str(exc)) from exc
+        return Response(data, media_type="image/jpeg", headers={"Cache-Control": "private, max-age=3600"})
+
+    @app.post("/media/{media_id}/preview", dependencies=secured)
+    def preview(media_id: str, body: PreviewBody) -> Response:
+        """Render an arbitrary (uncommitted) stack, e.g. while a slider is being dragged."""
+        path, _ = state.require().photo_stack(media_id)
+        try:
+            data = render_preview(path, body.ops, max_side=body.max)
+        except (ValueError, KeyError, OSError) as exc:
+            raise HTTPException(422, str(exc)) from exc
+        return Response(data, media_type="image/jpeg")
+
+    @app.get("/media/{media_id}/analysis", dependencies=secured)
+    def analysis(media_id: str) -> dict[str, Any]:
+        return state.require().analysis(media_id)
+
+    @app.get("/media/{media_id}/dsl", dependencies=secured)
+    def media_dsl(media_id: str) -> dict[str, str]:
+        _, stack = state.require().photo_stack(media_id)
+        return {"program": to_dsl(stack)}
+
+    @app.post("/media/{media_id}/export", dependencies=secured)
+    def export(media_id: str, body: ExportBody) -> dict[str, Any]:
+        session = state.require()
+        path, stack = session.photo_stack(media_id)
+        out = Path(body.path).expanduser()
+        if out.suffix == "":
+            out = out.with_suffix({"jpeg": ".jpg", "png": ".png", "tiff": ".tif", "webp": ".webp"}[body.format])
+        try:
+            return export_image(path, stack, out, body.format, body.quality, body.bit_depth, body.long_edge)
+        except (ValueError, OSError) as exc:
+            raise HTTPException(422, str(exc)) from exc
+
+    # ------------------------------------------------------------------ AI
+    @app.get("/ai/status", dependencies=secured)
+    def ai_status() -> dict[str, Any]:
+        return LLM.status()
+
+    @app.post("/ai/warmup", dependencies=secured)
+    def ai_warmup() -> dict[str, Any]:
+        """Start the local model in the background so the first request is fast."""
+        if LLM.available():
+            threading.Thread(target=_safe_start, daemon=True).start()
+        return LLM.status()
+
+    @app.post("/ai/edit", dependencies=secured)
+    def ai_edit(body: AiEditBody) -> dict[str, Any]:
+        """Plan edits for a photo. Returns variations (Edit DSL); nothing is applied until
+        the client runs photo.apply_program with source='ai'."""
+        session = state.require()
+        _, stack = session.photo_stack(body.media_id)
+        return plan(body.prompt, session.analysis(body.media_id), to_dsl(stack), body.variations)
 
     # -------------------------------------------------------------- events
     @app.websocket("/ws")

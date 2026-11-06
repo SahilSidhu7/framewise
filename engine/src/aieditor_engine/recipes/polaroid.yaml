@@ -1,0 +1,23 @@
+title: Instant photo
+description: 'Instant-camera print: faded, greenish shadows, warm highlights.'
+tags:
+- polaroid
+- instant
+- retro
+- faded
+- nostalgic
+steps:
+- adjust:
+    temperature: 10
+    tint: -5
+    contrast: -10
+    saturation: -10
+- fade:
+    amount: 0.3
+- color_grade:
+    shadows_hue: 160
+    shadows_sat: 25
+    highlights_hue: 50
+    highlights_sat: 20
+- vignette:
+    amount: 0.3

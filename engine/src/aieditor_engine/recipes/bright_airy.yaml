@@ -1,0 +1,18 @@
+title: Bright & airy
+description: Light, clean and bright with open shadows.
+tags:
+- bright
+- airy
+- clean
+- light
+- fresh
+- minimal
+steps:
+- adjust:
+    exposure: 0.35
+    shadows: 30
+    highlights: -25
+    contrast: -10
+    vibrance: 15
+    temperature: 5
+    whites: 10

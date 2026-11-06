@@ -33,6 +33,13 @@ export interface Track {
   clips: Clip[];
 }
 
+export interface EditOp {
+  id: string;
+  op: string;
+  params: Record<string, unknown>;
+  enabled: boolean;
+}
+
 export interface Project {
   id: string;
   name: string;
@@ -40,6 +47,35 @@ export interface Project {
   settings: { width: number; height: number; fps: number };
   media: Record<string, MediaItem>;
   tracks: Track[];
+  edits: Record<string, EditOp[]>;
+}
+
+export interface LookInfo {
+  name: string;
+  title: string;
+  description: string;
+  tags: string[];
+}
+
+export interface AiVariation {
+  program: string;
+  rationale: string;
+  source: "llm" | "rules";
+  warnings: string[];
+}
+
+export interface AiStatus {
+  state: "ready" | "idle" | "not_installed" | "error";
+  model: string | null;
+  error: string | null;
+}
+
+export interface ExportOptions {
+  path: string;
+  format: "jpeg" | "png" | "tiff" | "webp";
+  quality: number;
+  bit_depth: 8 | 16;
+  long_edge: number | null;
 }
 
 export interface Snapshot {
@@ -135,6 +171,44 @@ export class EngineClient {
     this.request<{ result: Record<string, unknown>; revision: number }>("POST", `/commands/${name}`, { params, source: "user" });
   undo = () => this.request<{ ok: boolean }>("POST", "/undo");
   redo = () => this.request<{ ok: boolean }>("POST", "/redo");
+
+  // ---- photo
+  looks = () => this.request<LookInfo[]>("GET", "/looks");
+  runAi = (name: string, params: Record<string, unknown>) =>
+    this.request<{ result: Record<string, unknown>; revision: number }>("POST", `/commands/${name}`, { params, source: "ai" });
+
+  /** Preview URL of the committed stack (or variants). `rev` busts the browser cache. */
+  renderUrl(mediaId: string, opts: { max?: number; bypass?: boolean; look?: string; s?: number; program?: string; rev?: number }): string {
+    const q = new URLSearchParams({ token: this.token, max: String(opts.max ?? 1600) });
+    if (opts.bypass) q.set("bypass", "1");
+    if (opts.look) q.set("look", opts.look);
+    if (opts.s !== undefined) q.set("s", String(opts.s));
+    if (opts.program !== undefined) q.set("program", opts.program);
+    if (opts.rev !== undefined) q.set("rev", String(opts.rev));
+    return `${this.base}/media/${mediaId}/render?${q}`;
+  }
+
+  /** Render an uncommitted stack (slider drags). Returns an object URL; caller revokes it. */
+  async preview(mediaId: string, ops: Pick<EditOp, "op" | "params" | "enabled">[], max: number): Promise<string> {
+    const res = await fetch(`${this.base}/media/${mediaId}/preview`, {
+      method: "POST",
+      headers: { "X-Engine-Token": this.token, "Content-Type": "application/json" },
+      body: JSON.stringify({ ops, max }),
+    });
+    if (!res.ok) throw new EngineError(res.status, await res.text());
+    return URL.createObjectURL(await res.blob());
+  }
+
+  aiStatus = () => this.request<AiStatus>("GET", "/ai/status");
+  aiWarmup = () => this.request<AiStatus>("POST", "/ai/warmup");
+  aiEdit = (mediaId: string, prompt: string) =>
+    this.request<{ variations: AiVariation[]; brief: string; llm_error: string | null }>("POST", "/ai/edit", {
+      media_id: mediaId,
+      prompt,
+      variations: 3,
+    });
+  exportImage = (mediaId: string, opts: ExportOptions) =>
+    this.request<{ path: string; width: number; height: number }>("POST", `/media/${mediaId}/export`, opts);
 
   /** Subscribe to engine events; reconnects automatically. Returns a stop function. */
   events(onEvent: (e: EngineEvent) => void): () => void {

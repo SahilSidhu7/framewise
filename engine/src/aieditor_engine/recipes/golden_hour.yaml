@@ -1,0 +1,28 @@
+title: Golden hour
+description: Warm sunset glow.
+tags:
+- golden
+- sunset
+- warm
+- sunny
+- summer
+- glow
+steps:
+- adjust:
+    temperature: 30
+    tint: 6
+    vibrance: 15
+    highlights: -15
+- color_grade:
+    highlights_hue: 40
+    highlights_sat: 35
+    midtones_hue: 30
+    midtones_sat: 15
+- bloom:
+    amount: 0.2
+    threshold: 0.65
+    tint: '#ffb36b'
+- light_leak:
+    amount: 0.15
+    position: top-left
+    color: '#ffb04a'

@@ -1,0 +1,26 @@
+title: Cyberpunk neon
+description: Neon magenta and blue, futuristic night city.
+tags:
+- cyberpunk
+- neon
+- futuristic
+- night
+- purple
+- synthwave
+steps:
+- adjust:
+    temperature: -25
+    tint: 25
+    contrast: 25
+- color_grade:
+    shadows_hue: 260
+    shadows_sat: 50
+    highlights_hue: 320
+    highlights_sat: 35
+- hsl:
+    band: blue
+    sat: 30
+- bloom:
+    amount: 0.3
+    threshold: 0.6
+    tint: '#ff4fd8'

@@ -1,0 +1,29 @@
+title: Aesthetic soft
+description: Airy, soft, slightly faded pastel look popular on social media.
+tags:
+- aesthetic
+- soft
+- airy
+- pastel
+- dreamy
+steps:
+- adjust:
+    exposure: 0.2
+    contrast: -15
+    highlights: -20
+    shadows: 25
+    saturation: -10
+    vibrance: 10
+- color_grade:
+    shadows_hue: 190
+    shadows_sat: 15
+    highlights_hue: 30
+    highlights_sat: 18
+- fade:
+    amount: 0.25
+- bloom:
+    amount: 0.15
+    threshold: 0.7
+    radius: 30
+- grain:
+    amount: 0.12

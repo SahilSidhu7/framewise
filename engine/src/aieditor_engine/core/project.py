@@ -78,6 +78,15 @@ class Track(BaseModel):
     clips: list[Clip] = Field(default_factory=list)
 
 
+class EditOp(BaseModel):
+    """One non-destructive operation in a photo's edit stack."""
+
+    id: str
+    op: str
+    params: dict = Field(default_factory=dict)
+    enabled: bool = True
+
+
 class ProjectSettings(BaseModel):
     width: int = 1920
     height: int = 1080
@@ -93,6 +102,7 @@ class Project(BaseModel):
     settings: ProjectSettings = Field(default_factory=ProjectSettings)
     media: dict[str, MediaItem] = Field(default_factory=dict)
     tracks: list[Track] = Field(default_factory=list)
+    edits: dict[str, list[EditOp]] = Field(default_factory=dict, description="media_id -> photo edit stack")
 
     def find_track(self, track_id: str) -> Track:
         for track in self.tracks:
