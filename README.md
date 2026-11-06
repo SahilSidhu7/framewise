@@ -2,7 +2,7 @@
 
 A local, beginner-first AI photo and video editor. See [PLAN.md](PLAN.md) for the full design and roadmap.
 
-**Status: working photo editor with local AI (M0 + M1 + first AI milestone).**
+**Status: working photo and video editor with local AI (M0, M1, first AI milestone, video v1).**
 
 - **Photo engine:** a 32-bit float, linear-light pipeline with 23 ops:
   - tone, color, HSL, curves, split-tone grade, LUTs
@@ -19,6 +19,14 @@ A local, beginner-first AI photo and video editor. See [PLAN.md](PLAN.md) for th
   3. An Edit Linter enforces the playbook rules on what it wrote.
 
   With no model installed, the rule planner answers alone. Every AI edit is a single undo step.
+- **Video engine:**
+  - timeline compositor with transitions, speed, Ken Burns motion, per-clip and whole-video looks
+  - cinematic bars, fades, captions and titles (6 styles, bundled OFL fonts)
+  - audio mix with crossfades, music ducking under speech and -14 LUFS loudness
+  - color grades baked into a 3D LUT per export; frames render in parallel (1080p about 17 fps on an RTX 4060 laptop)
+  - export to H.264 + AAC (NVENC/QSV/AMF first, software fallback), tagged BT.709
+- **Video AI director:** the model picks the intent (aspect, pace, transitions, look, captions, title, music). Code then chooses the best moments, cuts on the music beat, avoids jump cuts and keeps whole sentences.
+  - Auto-captions use local whisper.cpp.
 - **Beginner UI:**
   - AI prompt and one-click chips
   - looks gallery rendered on your photo
@@ -33,6 +41,8 @@ The engine looks in `%LOCALAPPDATA%\AIEditor` (or the `AIEDITOR_LLAMA_SERVER` an
 ```
 runtime/llama-<build>/llama-server.exe   # llama.cpp release zip, e.g. llama-bXXXXX-bin-win-vulkan-x64.zip
 models/Qwen3-1.7B-Q8_0.gguf              # huggingface.co/Qwen/Qwen3-1.7B-GGUF (Apache-2.0)
+runtime/whisper-<build>/Release/whisper-cli.exe   # whisper.cpp release zip (MIT), for auto-captions
+models/ggml-base.bin                     # huggingface.co/ggerganov/whisper.cpp (MIT)
 ```
 The model starts automatically when the AI tab opens, and runs only on 127.0.0.1.
 

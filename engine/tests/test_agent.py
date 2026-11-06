@@ -7,7 +7,14 @@ import pytest
 from aieditor_engine.agent import planner
 from aieditor_engine.agent.grammar import dsl_grammar
 from aieditor_engine.agent.llm import LLM
-from aieditor_engine.agent.planner import Hints, plan, plan_rules, request_hints, sanitize, wants
+from aieditor_engine.agent.planner import (
+    Hints,
+    plan,
+    plan_rules,
+    request_hints,
+    sanitize,
+    wants,
+)
 from aieditor_engine.dsl import compile_program
 
 NEUTRAL = {"size": [1200, 800], "orientation": "landscape", "brightness_median": 0.5, "saturation_mean": 0.2,

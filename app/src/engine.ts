@@ -18,12 +18,54 @@ export interface MediaItem {
   proxy_status: ProxyStatus;
 }
 
+export type TransitionKind = "crossfade" | "fade_black" | "fade_white" | "wipe_left" | "wipe_right" | "slide_left" | "slide_up" | "zoom" | "blur";
+export type Motion = "none" | "zoom_in" | "zoom_out" | "pan_left" | "pan_right";
+
 export interface Clip {
   id: string;
   media_id: string;
   start: number;
   in_point: number;
   out_point: number;
+  speed: number;
+  volume: number;
+  muted: boolean;
+  fade_in: number;
+  fade_out: number;
+  fit: "fill" | "fit";
+  motion: Motion;
+  transition: { kind: TransitionKind; duration: number } | null;
+  ops: EditOp[];
+}
+
+export const clipDuration = (c: Clip) => (c.out_point - c.in_point) / (c.speed || 1);
+
+export interface Caption {
+  id: string;
+  start: number;
+  end: number;
+  text: string;
+  style: string;
+  position: string | null;
+  kind: "caption" | "title";
+}
+
+export interface Job {
+  id: string;
+  kind: string;
+  label: string;
+  state: "queued" | "running" | "done" | "failed" | "cancelled";
+  progress: number;
+  result: Record<string, unknown> | null;
+  error: string | null;
+}
+
+export interface VideoVariation {
+  program: string;
+  rationale: string;
+  source: "llm" | "rules";
+  intent: string;
+  warnings: string[];
 }
 
 export interface Track {
@@ -44,11 +86,25 @@ export interface Project {
   id: string;
   name: string;
   kind: "photo" | "video" | "collage";
-  settings: { width: number; height: number; fps: number };
+  settings: {
+    width: number;
+    height: number;
+    fps: number;
+    letterbox: number | null;
+    duck_music: boolean;
+    normalize_audio: boolean;
+    fade_in: number;
+    fade_out: number;
+  };
   media: Record<string, MediaItem>;
   tracks: Track[];
   edits: Record<string, EditOp[]>;
+  grade: EditOp[];
+  captions: Caption[];
 }
+
+export const projectDuration = (p: Project) =>
+  Math.max(0, ...p.tracks.flatMap((t) => t.clips.map((c) => c.start + clipDuration(c))), ...p.captions.map((c) => c.end));
 
 export interface LookInfo {
   name: string;
@@ -209,6 +265,32 @@ export class EngineClient {
     });
   exportImage = (mediaId: string, opts: ExportOptions) =>
     this.request<{ path: string; width: number; height: number }>("POST", `/media/${mediaId}/export`, opts);
+
+  // ---- video
+  frameUrl(t: number, opts: { max?: number; rev?: number; program?: string; grade?: string } = {}): string {
+    const q = new URLSearchParams({ token: this.token, t: t.toFixed(3), max: String(opts.max ?? 960) });
+    if (opts.rev !== undefined) q.set("rev", String(opts.rev));
+    if (opts.program) q.set("program", opts.program);
+    if (opts.grade !== undefined) q.set("grade", opts.grade);
+    return `${this.base}/timeline/frame?${q}`;
+  }
+  previewRender = (maxSide = 640) =>
+    this.request<{ job: string | null; revision: number; url: string | null }>("POST", "/timeline/preview", { max_side: maxSide });
+  exportVideo = (path: string, preset: string, quality: "high" | "standard" | "small") =>
+    this.request<{ job: string; path: string }>("POST", "/timeline/export", { path, preset, quality });
+  jobs = () => this.request<Job[]>("GET", "/jobs");
+  cancelJob = (id: string) => this.request<{ ok: boolean }>("POST", `/jobs/${id}/cancel`);
+  captionStyles = () => this.request<{ name: string; description: string }[]>("GET", "/captions/styles");
+  speechStatus = () => this.request<{ available: boolean; model: string | null }>("GET", "/ai/speech/status");
+  autoCaptions = (style: string) => this.request<{ job: string }>("POST", "/timeline/auto_captions", { style });
+  timelineDsl = () => this.request<{ program: string; duration: number }>("GET", "/timeline/dsl");
+  aiVideo = (prompt: string) =>
+    this.request<{ variations: VideoVariation[]; brief: string; llm_error: string | null; error?: string }>("POST", "/ai/video", {
+      prompt,
+      variations: 3,
+    });
+  aiVideoApply = (program: string, mode: "replace" | "append" = "replace") =>
+    this.request<{ result: Record<string, unknown>; revision: number }>("POST", "/ai/video/apply", { program, mode });
 
   /** Subscribe to engine events; reconnects automatically. Returns a stop function. */
   events(onEvent: (e: EngineEvent) => void): () => void {

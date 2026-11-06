@@ -8,11 +8,23 @@ import pytest
 from PIL import Image
 
 from aieditor_engine.dsl import DslError, compile_program, to_dsl
-from aieditor_engine.imaging.color import hsv_to_rgb, linear_to_srgb, monotone_curve, rgb_to_hsv, srgb_to_linear
+from aieditor_engine.imaging.color import (
+    hsv_to_rgb,
+    linear_to_srgb,
+    monotone_curve,
+    rgb_to_hsv,
+    srgb_to_linear,
+)
 from aieditor_engine.imaging.lut import apply_lut3d, load_cube, write_cube
 from aieditor_engine.imaging.ops import OPS, detect_horizon_angle
 from aieditor_engine.imaging.recipes import expand, load_recipes, scale_params
-from aieditor_engine.imaging.render import analyze, apply_stack, export_image, load_linear, render_preview
+from aieditor_engine.imaging.render import (
+    analyze,
+    apply_stack,
+    export_image,
+    load_linear,
+    render_preview,
+)
 
 
 @pytest.fixture

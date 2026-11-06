@@ -49,7 +49,7 @@ input, select { width: 100%; }
 .editor {
   height: 100%;
   display: grid;
-  grid-template-columns: 300px 1fr;
+  grid-template-columns: 300px minmax(0, 1fr);
   grid-template-rows: auto auto 1fr 200px;
   grid-template-areas: "bar bar" "notice notice" "bin viewer" "tl tl";
 }
@@ -145,3 +145,48 @@ button.icon { padding: 2px 8px; background: transparent; }
 .modal { width: min(420px, 92vw); display: flex; flex-direction: column; gap: 12px; }
 .modal h3 { margin: 0; }
 .modal label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--muted); }
+
+/* ---------------------------------------------------------------- video mode */
+.video { height: 100%; min-width: 0; display: grid; grid-template-rows: minmax(0, 1fr) 260px; min-height: 0; }
+.video-top { display: grid; grid-template-columns: minmax(0, 1fr) 360px; min-height: 0; min-width: 0; }
+.v-viewer { display: flex; flex-direction: column; min-width: 0; min-height: 0; overflow: hidden; background: #0b0c0e; }
+.v-stage { position: relative; flex: 1; min-height: 0; margin: 12px 12px 0; }
+.v-stage img, .v-stage video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; filter: drop-shadow(0 6px 24px rgba(0,0,0,.55)); }
+.v-stage img.loading { opacity: .7; }
+.v-stage .hidden { visibility: hidden; }
+.v-empty { position: absolute; inset: 0; display: grid; place-content: center; text-align: center; padding: 16px; }
+.transport { display: flex; gap: 8px; align-items: center; padding: 8px 12px; }
+.transport .play { min-width: 48px; }
+.tc { font-variant-numeric: tabular-nums; }
+.v-panel { min-height: 0; }
+
+.tl { display: flex; flex-direction: column; border-top: 1px solid var(--line); background: var(--panel); min-height: 0; }
+.tl-tools { display: flex; gap: 8px; align-items: center; padding: 6px 10px; border-bottom: 1px solid var(--line); }
+.tl-scroll { flex: 1; overflow: auto; position: relative; }
+.tl-inner { position: relative; min-height: 100%; }
+.tl-row { display: flex; height: 48px; border-bottom: 1px solid var(--line); }
+.tl-row.audio { height: 36px; }
+.tl-row.captions { height: 32px; }
+.tl-ruler-row { height: 24px; position: sticky; top: 0; z-index: 3; background: var(--panel); }
+.tl-label { width: 90px; flex: none; position: sticky; left: 0; z-index: 2; background: var(--panel); border-right: 1px solid var(--line); padding: 6px 8px; color: var(--muted); }
+.tl-lane { position: relative; flex: none; }
+.tl-ruler { cursor: text; }
+.tick { position: absolute; top: 4px; font-size: 10px; color: var(--muted); padding-left: 3px; border-left: 1px solid var(--line); height: 18px; }
+.tl-clip { position: absolute; top: 4px; bottom: 4px; border-radius: 5px; border: 1px solid #6c8cff; background: #3b4f9a center / auto 100% repeat-x; cursor: grab; overflow: hidden; touch-action: none; }
+.tl-clip.audio { background: #2f6b4f; border-color: #3fbf7f; }
+.tl-clip.selected { border-color: #fff; box-shadow: 0 0 0 1px #fff inset; }
+.tl-name { position: absolute; left: 6px; right: 6px; bottom: 2px; font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-shadow: 0 1px 2px #000; pointer-events: none; }
+.tl-handle { position: absolute; top: 0; bottom: 0; width: 8px; cursor: ew-resize; background: #ffffff22; }
+.tl-handle.head { left: 0; }
+.tl-handle.tail { right: 0; }
+.tl-trans { position: absolute; top: 50%; width: 10px; height: 10px; margin-top: -5px; transform: rotate(45deg); background: #ffd28a; border: 1px solid #000; z-index: 1; }
+.tl-cap { position: absolute; top: 4px; bottom: 4px; border-radius: 4px; background: #5a4a8a; border: 1px solid #a78bfa; font-size: 10px; padding: 2px 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer; }
+.tl-cap.title { background: #7a5a2a; border-color: #ffd28a; }
+.tl-cap.selected { border-color: #fff; }
+.tl-playhead { position: absolute; top: 0; bottom: 0; width: 2px; background: #ff5c5c; pointer-events: none; z-index: 4; }
+.caption-list li.active { border-color: var(--accent); }
+.progress { height: 8px; border-radius: 4px; background: var(--panel-2); overflow: hidden; }
+.progress > div { height: 100%; background: var(--accent); transition: width .2s; }
+.video { grid-template-columns: minmax(0, 1fr); }
+.tl { min-width: 0; overflow: hidden; }
+html, body { overflow: hidden; }

@@ -111,9 +111,13 @@ def flatten(ops: Iterable[dict[str, Any]]) -> list[tuple[str, dict[str, Any]]]:
 
 
 def apply_stack(img: np.ndarray, ops: Iterable[dict[str, Any]], ctx: RenderContext | None = None) -> np.ndarray:
+    return apply_flat(img, flatten(ops), ctx)
+
+
+def apply_flat(img: np.ndarray, flat: list[tuple[str, dict[str, Any]]], ctx: RenderContext | None = None) -> np.ndarray:
     ctx = ctx or make_context()
     domain = "linear"
-    for name, params in flatten(ops):
+    for name, params in flat:
         spec = OPS[name]
         p = spec.params_model.model_validate(params)
         if spec.domain != domain:

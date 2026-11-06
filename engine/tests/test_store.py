@@ -6,7 +6,13 @@ from pathlib import Path
 import pytest
 
 from aieditor_engine.core.project import SCHEMA_VERSION, ProjectKind
-from aieditor_engine.core.store import ProjectPaths, create_project, load_project, migrate, save_project
+from aieditor_engine.core.store import (
+    ProjectPaths,
+    create_project,
+    load_project,
+    migrate,
+    save_project,
+)
 
 
 def test_create_save_load_roundtrip(tmp_path: Path) -> None:

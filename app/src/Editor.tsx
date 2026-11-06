@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { EngineClient, isTauri, type MediaItem, type Snapshot } from "./engine";
 import { PhotoEditor } from "./PhotoEditor";
+import { VideoEditor } from "./VideoEditor";
 
 const PX_PER_SECOND = 40;
 
@@ -31,7 +32,8 @@ export function Editor({ client, snapshot, proxyProgress }: Props) {
   // default selection: first photo in photo/collage projects
   const fallback = project.kind !== "video" ? media.find((m) => m.kind === "image")?.id ?? null : null;
   const current = (selected && project.media[selected]) || (fallback ? project.media[fallback] : undefined);
-  const photoMode = current?.kind === "image";
+  const videoMode = project.kind === "video";
+  const photoMode = !videoMode && current?.kind === "image";
 
   const guard = async (fn: () => Promise<unknown>) => {
     setNotice(null);
@@ -63,7 +65,7 @@ export function Editor({ client, snapshot, proxyProgress }: Props) {
     });
 
   return (
-    <div className={`editor ${photoMode ? "photo-mode" : ""}`}>
+    <div className={`editor ${photoMode || videoMode ? "photo-mode" : ""}`}>
       <header className="toolbar">
         <strong>{project.name}</strong>
         <span className="muted small">
@@ -94,7 +96,8 @@ export function Editor({ client, snapshot, proxyProgress }: Props) {
         {media.length === 0 && <p className="muted small pad">No media yet. Import photos, videos or audio.</p>}
         <ul>
           {media.map((m) => (
-            <li key={m.id} className={m.id === current?.id ? "active" : ""} onClick={() => setSelected(m.id)} onDoubleClick={() => m.kind !== "image" && addToTimeline(m)}>
+            <li key={m.id} className={m.id === current?.id ? "active" : ""} onClick={() => setSelected(m.id)} onDoubleClick={() => (videoMode || m.kind !== "image") && addToTimeline(m)}
+              title={videoMode ? "Double-click to add to the timeline" : undefined}>
               {m.thumb_path ? (
                 <img src={client.fileUrl(`/media/${m.id}/thumb`)} alt="" />
               ) : (
@@ -113,7 +116,11 @@ export function Editor({ client, snapshot, proxyProgress }: Props) {
         </ul>
       </aside>
 
-      {photoMode && current ? (
+      {videoMode ? (
+        <main className="photo-host">
+          <VideoEditor client={client} snapshot={snapshot} onNotice={setNotice} />
+        </main>
+      ) : photoMode && current ? (
         <main className="photo-host">
           <PhotoEditor client={client} snapshot={snapshot} item={current} onNotice={setNotice} />
         </main>

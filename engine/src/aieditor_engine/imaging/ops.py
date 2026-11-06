@@ -17,6 +17,7 @@ import math
 import re
 from collections.abc import Callable
 from dataclasses import dataclass, field
+from functools import lru_cache
 from typing import Any, Literal
 
 import cv2
@@ -159,7 +160,8 @@ def adjust(img: np.ndarray, p: AdjustParams, ctx: RenderContext) -> np.ndarray:
         lum = luminance(d)
 
     if p.highlights or p.shadows:
-        base = _gauss(lum, ctx.px(img, 8))  # soft mask avoids posterized edges
+        # soft mask avoids posterized edges; video LUT baking needs the per-pixel form
+        base = lum if ctx.extra.get("pointwise") else _gauss(lum, ctx.px(img, 8))
         mh = smoothstep(0.45, 1.0, base)
         ms = 1 - smoothstep(0.0, 0.55, base)
         new_l = lum + (p.highlights / 100) * 0.30 * mh * (1 - lum if p.highlights > 0 else lum) \
@@ -426,13 +428,21 @@ class VignetteParams(BaseModel):
 @op("vignette", VignetteParams, "linear", "Darken (or lighten) the corners.", "effects", ("amount",))
 def vignette(img: np.ndarray, p: VignetteParams, ctx: RenderContext) -> np.ndarray:
     h, w = img.shape[:2]
+    return img * _vignette_gain(h, w, p.amount, p.midpoint, p.feather)
+
+
+@lru_cache(maxsize=8)
+def _vignette_gain(h: int, w: int, amount: float, midpoint: float, feather: float) -> np.ndarray:
+    """Cached: video frames reuse the same mask every frame."""
     y, x = np.ogrid[-1 : 1 : complex(0, h), -1 : 1 : complex(0, w)]
     aspect = w / h
     r = np.sqrt((x * min(aspect, 1)) ** 2 + (y / max(aspect, 1)) ** 2) / math.sqrt(2) * 1.4
-    start = 0.25 + 0.6 * p.midpoint
-    mask = smoothstep(start - p.feather * 0.5, start + p.feather * 0.6, r).astype(np.float32)
-    gain = 1 - p.amount * 0.85 * mask if p.amount >= 0 else 1 + (-p.amount) * 0.6 * mask
-    return img * gain[..., None]
+    start = 0.25 + 0.6 * midpoint
+    mask = smoothstep(start - feather * 0.5, start + feather * 0.6, r).astype(np.float32)
+    gain = 1 - amount * 0.85 * mask if amount >= 0 else 1 + (-amount) * 0.6 * mask
+    gain = gain.astype(np.float32)[..., None]
+    gain.flags.writeable = False
+    return gain
 
 
 class BloomParams(BaseModel):

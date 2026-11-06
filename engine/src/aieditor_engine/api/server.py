@@ -16,21 +16,31 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any, Literal
 
-from fastapi import Depends, FastAPI, HTTPException, Query, Request, Response, WebSocket, WebSocketDisconnect
+from fastapi import (
+    Depends,
+    FastAPI,
+    HTTPException,
+    Query,
+    Request,
+    Response,
+    WebSocket,
+    WebSocketDisconnect,
+)
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 
 from .. import __version__
-from ..core.commands import CommandError, list_commands
-from ..core.project import ProjectKind
 from ..agent.llm import LLM, LLMUnavailable
 from ..agent.planner import plan
+from ..core.commands import CommandError, list_commands
+from ..core.project import ProjectKind
 from ..dsl import DslError, compile_program, to_dsl
 from ..imaging.ops import OPS
 from ..imaging.recipes import load_recipes
 from ..imaging.render import export_image, render_preview
 from ..session import Session
+from . import video_routes
 
 ALLOWED_ORIGINS = [
     "tauri://localhost",
@@ -316,6 +326,8 @@ def create_app(token: str | None = None) -> FastAPI:
         session = state.require()
         _, stack = session.photo_stack(body.media_id)
         return plan(body.prompt, session.analysis(body.media_id), to_dsl(stack), body.variations)
+
+    video_routes.register(app, state.require, secured)
 
     # -------------------------------------------------------------- events
     @app.websocket("/ws")

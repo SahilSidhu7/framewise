@@ -11,7 +11,16 @@ from typing import Literal
 from pydantic import BaseModel, Field
 
 from .commands import CommandError, command
-from .project import Clip, MediaItem, MediaKind, Project, ProjectSettings, ProxyStatus, Track, new_id
+from .project import (
+    Clip,
+    MediaItem,
+    MediaKind,
+    Project,
+    ProjectSettings,
+    ProxyStatus,
+    Track,
+    new_id,
+)
 
 # ------------------------------------------------------------------ project
 
@@ -29,11 +38,20 @@ class SettingsParams(BaseModel):
     width: int | None = Field(None, ge=16, le=16384)
     height: int | None = Field(None, ge=16, le=16384)
     fps: float | None = Field(None, gt=0, le=240)
+    letterbox: float | None = Field(None, ge=1.0, le=3.0, description="null removes the bars")
+    duck_music: bool | None = None
+    normalize_audio: bool | None = None
+    fade_in: float | None = Field(None, ge=0, le=10)
+    fade_out: float | None = Field(None, ge=0, le=10)
 
 
-@command("project.set_settings", SettingsParams, "Set output resolution and frame rate.", "project")
+@command("project.set_settings", SettingsParams, "Set output size, frame rate, cinematic bars, fades and audio options.", "project")
 def project_set_settings(p: Project, a: SettingsParams) -> None:
-    p.settings = ProjectSettings(**{**p.settings.model_dump(), **a.model_dump(exclude_none=True)})
+    changes = a.model_dump(exclude_unset=True)
+    for key in ("width", "height", "fps", "duck_music", "normalize_audio", "fade_in", "fade_out"):
+        if changes.get(key, 0) is None:
+            changes.pop(key)  # only letterbox may be cleared with null
+    p.settings = ProjectSettings(**{**p.settings.model_dump(), **changes})
 
 
 # -------------------------------------------------------------------- media
@@ -133,6 +151,7 @@ class ClipTrimParams(BaseModel):
     clip_id: str
     in_point: float | None = Field(None, ge=0)
     out_point: float | None = Field(None, gt=0)
+    start: float | None = Field(None, ge=0, description="New timeline position (trimming the head keeps the tail in place)")
 
 
 @command("clip.trim", ClipTrimParams, "Change a clip's source in/out points.", "timeline")
@@ -146,6 +165,10 @@ def clip_trim(p: Project, a: ClipTrimParams) -> None:
     if media.kind != MediaKind.IMAGE and media.duration and new_out > media.duration + 1e-6:
         raise CommandError(f"out_point {new_out} beyond media duration {media.duration}")
     clip.in_point, clip.out_point = new_in, new_out
+    if a.start is not None:
+        clip.start = a.start
+        track, _ = p.find_clip(a.clip_id)
+        track.clips.sort(key=lambda c: c.start)
 
 
 class ClipMoveParams(BaseModel):
