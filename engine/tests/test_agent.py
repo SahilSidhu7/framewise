@@ -100,6 +100,39 @@ def test_sanitize_enforces_playbook() -> None:
     assert any("exposure" in f for f in fixes) and any("straighten" in f for f in fixes)
 
 
+def _adjust(program: str, notes: list[str], text: str) -> dict:
+    out, _ = sanitize(compile_program(program), {**NEUTRAL, "notes": notes}, Hints(None, None, False, 1.0, ("adjust",), f" {text} "))
+    return next((o["params"] for o in out if o["op"] == "adjust"), {})
+
+
+def test_sanitize_follows_request_direction() -> None:
+    # "moody dark" never brightens, "warm" never cools, even if the model proposes it
+    assert "exposure" not in _adjust("adjust exposure=0.8 clarity=10", ["underexposed"], "moody dark aesthetic")
+    assert "temperature" not in _adjust("adjust temperature=-22 vibrance=10", ["warm cast"], "warm golden hour")
+    assert "temperature" not in _adjust("adjust temperature=20 vibrance=10", [], "cold winter look")
+    # dim photo may be brightened on "fix it"; "too dark" counts as asking to brighten
+    assert _adjust("adjust exposure=0.6", ["slightly dim (try exposure +0.6)"], "fix it")["exposure"] == 0.6
+    assert _adjust("adjust exposure=0.6", [], "it's too dark")["exposure"] == 0.6
+
+
+def test_sanitize_keeps_white_background() -> None:
+    p = _adjust("adjust exposure=-1 highlights=-50 shadows=-30 vibrance=20", ["white background (keep whites bright, do not darken)"], "make the food look delicious")
+    assert p == {"vibrance": 20}
+    # genuinely overexposed: gentle recovery only
+    assert _adjust("adjust exposure=-1.5", ["overexposed"], "fix it")["exposure"] == -0.6
+
+
+def test_analyze_white_background_not_overexposed() -> None:
+    import numpy as np
+
+    from aieditor_engine.imaging.render import analyze, srgb_to_linear
+
+    img = np.ones((200, 300, 3), np.float32)  # white backdrop
+    img[60:140, 90:210] = srgb_to_linear(np.array([0.8, 0.5, 0.2], np.float32))  # orange subject
+    notes = " ".join(analyze(img)["notes"])
+    assert "white background" in notes and "overexposed" not in notes and "clipped" not in notes
+
+
 def test_grammar_constraints() -> None:
     g = dsl_grammar(("noir",), None, ("adjust",))
     assert 'lookname ::= "noir"' in g

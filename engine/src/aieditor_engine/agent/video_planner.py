@@ -309,7 +309,10 @@ def direct(intent: Intent, ctx: VideoContext) -> str:
     talk = [m for m in vis if m.kind == "video" and m.speech]
     broll = [m for m in vis if m not in talk]
     material = sum(m.duration if m.kind == "video" else 3.0 for m in broll)
-    default_len = 20.0 if intent.pace == "fast" else 60.0 if intent.pace == "medium" else 90.0
+    # social-length defaults: viewers drop off fast, and long edits repeat the same clips
+    default_len = 20.0 if intent.pace == "fast" else 40.0 if intent.pace == "medium" else 45.0
+    # playbook: shot variety - more than a few moments from one clip reads as repetitive
+    max_shots = 8 if len(broll) == 1 else {"fast": 4}.get(intent.pace, 3)
     # fast edits keep only the first sentences; music-led edits shouldn't stall on a long talk
     speech_budget = (intent.length or default_len) * (0.45 if intent.pace == "fast" else 0.8)
     talk_cuts = {m.media_id: _speech_cut(m, speech_budget / max(1, len(talk))) for m in talk}
@@ -323,7 +326,8 @@ def direct(intent: Intent, ctx: VideoContext) -> str:
         weights = []
         for m in broll:
             q = sum(m.analysis.get("seconds", [0.5])) / max(1, len(m.analysis.get("seconds", [1])))
-            weights.append((m.duration if m.kind == "video" else 3.0) * (0.5 + q))
+            # sqrt: a long clip earns more shots, but not all of them (keeps variety)
+            weights.append((m.duration if m.kind == "video" else 3.0) ** 0.5 * (0.5 + q))
         total_w = sum(weights) or 1.0
         motions = ["zoom_in", "pan_right", "zoom_out", "pan_left"]
         mi = 0
@@ -339,8 +343,8 @@ def direct(intent: Intent, ctx: VideoContext) -> str:
             speed = 0.5 if intent.slowmo and not m.speech else 1.0
             src_len = shot_len * speed
             # moments from one clip are spread out (a gap between them) so cuts never look like jump cuts
-            gap = max(0.5, src_len * 0.75)
-            k = max(1, min(int((m.duration + gap) // (src_len + gap)), round(alloc / shot_len)))
+            gap = max(1.5, src_len)
+            k = max(1, min(int((m.duration + gap) // (src_len + gap)), round(alloc / shot_len), max_shots))
             used: list[tuple[float, float]] = []
             shots = []
             for _ in range(k):

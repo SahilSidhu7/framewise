@@ -231,6 +231,10 @@ SAFE_LOOKS = ("vivid_pop", "bright_airy", "film_portra", "golden_hour", "aesthet
 
 
 # Edit Linter for model output: playbook rules as hard checks.
+DARK_WORDS = r"\b(dark\w*|moody|low.?key|night|gloomy|shadowy|dim\w*|noir)\b"
+BRIGHT_WORDS = r"\b(bright\w*|lighten\w*|lighter|airy|high.?key|exposure|too dark|underexposed)\b"
+WARM_WORDS = r"\b(warm\w*|golden|sunset|sunny|autumn\w*|cozy|summer\w*)\b"
+COOL_WORDS = r"\b(cool\w*|cold|icy|winter\w*|frosty)\b"
 SAFE_ADJUST = {"exposure": 2.0, "contrast": 40, "highlights": 60, "shadows": 60, "whites": 40, "blacks": 40,
                "temperature": 35, "tint": 25, "vibrance": 40, "saturation": 40, "clarity": 40}
 
@@ -255,12 +259,34 @@ def sanitize(ops: list[dict[str, Any]], analysis: dict[str, Any], hints: Hints) 
             for k, limit in SAFE_ADJUST.items():
                 if k in params and abs(params[k]) > limit:
                     params[k] = limit if params[k] > 0 else -limit
-            asked_bright = re.search(r"\b(bright\w*|light\w*|dark\w*|exposure)\b", text)
-            if "exposure" in params and not asked_bright:
+            # Exposure must move the way the user (or the measurements) asked, never against it.
+            wants_dark = re.search(DARK_WORDS, text) and not re.search(r"\b(too dark|underexposed)\b", text)
+            wants_bright = re.search(BRIGHT_WORDS, text)
+            if "exposure" in params:
                 ev = params["exposure"]
-                if (ev > 0.25 and "underexposed" not in notes) or (ev < -0.25 and "overexposed" not in notes and "clipped" not in notes):
+                if ev > 0.25:
+                    ok = bool(wants_bright) or (("underexposed" in notes or "slightly dim" in notes) and not wants_dark)
+                elif ev < -0.25:
+                    ok = bool(wants_dark) or (("overexposed" in notes or "clipped" in notes) and not wants_bright)
+                    if ok and not wants_dark and ev < -0.6:  # recover highlights gently; the rest is the look's job
+                        params["exposure"] = -0.6
+                else:
+                    ok = True
+                if not ok:
                     params.pop("exposure")
-                    fixed.append("removed unjustified exposure change")
+                    fixed.append("removed exposure change against the request")
+            if "white background" in notes and not wants_dark:
+                for k in ("exposure", "highlights", "whites"):
+                    if params.get(k, 0) < 0:
+                        params.pop(k)
+                        fixed.append(f"kept white background ({k})")
+                if params.get("shadows", 0) < 0:
+                    params.pop("shadows")
+            # Temperature must not fight a warm/cool request (casts are fixed by white_balance instead).
+            temp = params.get("temperature", 0)
+            if (temp < 0 and re.search(WARM_WORDS, text)) or (temp > 0 and re.search(COOL_WORDS, text)):
+                params.pop("temperature")
+                fixed.append("removed temperature change against the request")
             if merged_adjust is not None:
                 merged_adjust.update(params)
                 fixed.append("merged adjust")
@@ -332,6 +358,16 @@ def _plan_llm(prompt: str, brief: str, hints: Hints, analysis: dict[str, Any], n
         if "tilted horizon" in notes and "straighten" not in present and re.search(FIX_WORDS, hints.text):
             ops.insert(0, {"op": "straighten", "params": {}})  # playbook: correct first
             warnings.append("added straighten (tilted horizon)")
+        # "dark/moody" on a bright photo: the look alone barely darkens it.
+        wants_dark = re.search(DARK_WORDS, hints.text) and not re.search(r"(too dark|underexposed)", hints.text)
+        if wants_dark and analysis.get("brightness_median", 0) > 0.55:
+            adj = next((o for o in ops if o["op"] == "adjust"), None)
+            if adj is None:
+                adj = {"op": "adjust", "params": {}}
+                ops.insert(next((i for i, o in enumerate(ops) if o["op"] == "look"), len(ops)), adj)
+            if adj["params"].get("exposure", 0) > -0.5:
+                adj["params"]["exposure"] = -0.7
+                warnings.append("darkened for a dark/moody request")
         for pattern, stmt in EXTRA_OPS:
             op_name = stmt.split()[0]
             if op_name not in present and wants(pattern, hints.text):

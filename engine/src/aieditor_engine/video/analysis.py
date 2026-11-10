@@ -210,9 +210,30 @@ def analyze_audio_track(path: Path) -> dict[str, Any]:
     env = np.sqrt((y[: n * hop].reshape(n, hop) ** 2).mean(axis=1)) if n else np.zeros(1)
     active = float((env > max(rms * 0.5, 1e-4)).mean())
     mod = float(np.std(env) / (np.mean(env) + 1e-9))
+    syllabic = _syllabic_ratio(y, 16000) if rms >= 0.003 else 0.0
     return {
         "has_audio": True,
         "loudness_db": round(float(20 * np.log10(max(rms, 1e-9))), 1),
         "silent": rms < 0.003,
-        "speech_likely": bool(rms >= 0.003 and mod > 0.9 and 0.2 < active < 0.95),
+        "speech_likely": bool(rms >= 0.003 and (syllabic > 0.43 or (mod > 0.9 and 0.2 < active < 0.95))),
     }
+
+
+def _syllabic_ratio(y: np.ndarray, sr: int) -> float:
+    """Share of the voice-band envelope's modulation energy at syllable rate (2-8 Hz).
+
+    Speech sits around 0.45-0.5; music, waves, wind and traffic stay below ~0.4,
+    even when background noise hides the pauses between words.
+    """
+    spec = np.fft.rfft(y)
+    f = np.fft.rfftfreq(y.size, 1 / sr)
+    spec[(f < 300) | (f > 3400)] = 0
+    v = np.fft.irfft(spec, y.size)
+    hop = sr // 100
+    n = v.size // hop
+    if n < 200:  # under 2 s: not enough to judge
+        return 0.0
+    env = np.sqrt((v[: n * hop].reshape(n, hop) ** 2).mean(axis=1))
+    m = np.abs(np.fft.rfft(env - env.mean())) ** 2
+    mf = np.fft.rfftfreq(n, 1 / 100)
+    return float(m[(mf >= 2) & (mf <= 8)].sum() / (m[(mf >= 0.2) & (mf <= 20)].sum() + 1e-12))

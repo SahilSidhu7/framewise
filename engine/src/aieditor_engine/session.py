@@ -23,6 +23,9 @@ from .media.proxy import ProxyError, make_proxy
 log = logging.getLogger(__name__)
 
 
+ANALYSIS_VERSION = 2
+
+
 class Session:
     def __init__(self, root: Path, project: Project, *, proxy_workers: int = 1) -> None:
         self.paths = ProjectPaths(root)
@@ -118,7 +121,8 @@ class Session:
             return self._analysis[key]
         path = self._cache_json(kind, media_id)
         src = Path(item.path)
-        stamp = src.stat().st_mtime_ns if src.exists() else 0
+        # bump ANALYSIS_VERSION when an analyzer changes so stale cache files are recomputed
+        stamp = f"{src.stat().st_mtime_ns if src.exists() else 0}:v{ANALYSIS_VERSION}"
         if path.is_file():
             try:
                 data = json.loads(path.read_text(encoding="utf-8"))

@@ -359,3 +359,29 @@ def test_video_api_flow(clips, tmp_path):
             if all(j["state"] in ("done", "failed", "cancelled") for j in c.get("/jobs", headers=h).json()):
                 break
             time.sleep(0.1)
+
+
+def test_syllabic_ratio_separates_speech_from_ambience() -> None:
+    from aieditor_engine.video.analysis import _syllabic_ratio
+
+    sr = 16000
+    rng = np.random.default_rng(0)
+    t = np.arange(sr * 8) / sr
+    noise = rng.standard_normal(t.size).astype(np.float32) * 0.1
+    tone = np.sin(2 * np.pi * 900 * t).astype(np.float32)
+    # voice-band carrier switched on and off at ~4 syllables per second, over noise
+    syllables = (np.sin(2 * np.pi * 4 * t) > 0.2).astype(np.float32)
+    speechy = 0.3 * tone * syllables + 0.02 * noise
+    surf = 0.3 * noise * (1 + 0.3 * np.sin(2 * np.pi * 0.15 * t)).astype(np.float32)  # slow swell
+    assert _syllabic_ratio(speechy, sr) > 0.43 > _syllabic_ratio(surf, sr)
+
+
+def test_captions_move_into_letterbox_bar() -> None:
+    from aieditor_engine.video.text import draw_text
+
+    h, w = 1080, 1920
+    bar = round((h - w / 2.39) / 2)
+    frame = np.zeros((h, w, 3), np.uint8)
+    draw_text(frame, "a short line of dialogue for the bar", "cinematic", None, 1.0, 1.0, bar=bar)
+    rows = np.nonzero(frame.max(axis=(1, 2)) > 0)[0]
+    assert rows.min() >= h - bar and rows.max() < h  # entirely inside the bottom bar

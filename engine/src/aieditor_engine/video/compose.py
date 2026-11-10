@@ -226,6 +226,7 @@ def render_frame(
         fade = min(fade, (total - t) / s.fade_out)
     if fade < 1:
         frame = encode_u8(u8_to_linear(frame) * max(0.0, fade), seed)
+    bar = 0
     if s.letterbox:
         visible_h = w / s.letterbox
         if visible_h < h:
@@ -237,7 +238,8 @@ def render_frame(
     if captions:
         for cap in project.captions:
             if cap.start <= t < cap.end:
-                draw_text(frame, cap.text, cap.style, cap.position, t - cap.start, cap.end - t)
+                draw_text(frame, cap.text, cap.style, cap.position, t - cap.start, cap.end - t,
+                          bar if cap.kind == "caption" else 0)
     return frame
 
 

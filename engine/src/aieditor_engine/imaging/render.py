@@ -249,16 +249,23 @@ def analyze(img_linear: np.ndarray) -> dict[str, Any]:
     ]
 
     notes = []
-    clipped = float((lum > 0.985).mean())
+    hot = lum > 0.985
+    clipped = float(hot.mean())
+    # Product/food shots on white: the clipped area is a neutral backdrop, not a mistake.
+    white_bg = clipped > 0.02 and float((sat[hot] < 0.05).mean()) > 0.9 and float(((lum > 0.9) & (sat < 0.05)).mean()) > 0.15
     # suggested exposure: bring the brightest tones (p99) up to ~0.9 display, in linear stops
     ev_fix = float(np.log2(srgb_to_linear(np.float32(0.9)) / max(float(srgb_to_linear(np.float32(max(p99, 0.02)))), 1e-4)))
     if p50 < 0.28 or p99 < 0.68:
         notes.append(f"underexposed (try exposure +{min(2.0, max(0.3, ev_fix)):.1f})")
+    elif white_bg:
+        notes.append("white background (keep whites bright, do not darken)")
     elif clipped > 0.02 or (p50 > 0.82 and p1 > 0.3):
         notes.append("overexposed")
     elif p50 > 0.68:
         notes.append("bright / high-key (keep it bright)")
-    if clipped > 0.02:
+    elif p99 < 0.85 and ev_fix > 0.25:
+        notes.append(f"slightly dim (try exposure +{min(1.0, ev_fix):.1f})")
+    if clipped > 0.02 and not white_bg:
         notes.append("clipped highlights")
     if float((lum < 0.015).mean()) > 0.05:
         notes.append("crushed shadows")

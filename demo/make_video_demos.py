@@ -26,6 +26,7 @@ from aieditor_engine.video.export import ExportSpec, export_video  # noqa: E402
 from aieditor_engine.video.vdsl import apply_video_program  # noqa: E402
 
 OUT = ROOT / "output"
+ONLY: str | None = None  # optional: render one case by name
 WALL = Path(r"C:\Windows\Web")
 STILLS = [WALL / "Wallpaper/ThemeC/img28.jpg", WALL / "Screen/img102.jpg", WALL / "Wallpaper/ThemeC/img29.jpg",
           WALL / "Wallpaper/ThemeC/img31.jpg", WALL / "Wallpaper/ThemeC/img30.jpg"]
@@ -53,12 +54,14 @@ def strip(project, root: Path, times: list[float], title: str, dst: Path) -> Non
 
 
 def run_case(name: str, files: list[Path], prompt: str) -> None:
+    if ONLY and ONLY != name:
+        return
     root = OUT / "work" / name
     shutil.rmtree(root, ignore_errors=True)
     s = Session.create(root, name, ProjectKind.VIDEO)
     s.import_media(files)
     s.wait_for_jobs()
-    n_visual = sum(1 for f in files if f.suffix.lower() != ".m4a")
+    n_visual = sum(1 for f in files if f.suffix.lower() not in (".m4a", ".mp3", ".wav", ".ogg"))
 
     # BEFORE: everything joined, untouched
     before = s.bus.project.model_copy(deep=True)
@@ -87,9 +90,17 @@ def run_case(name: str, files: list[Path], prompt: str) -> None:
 def main() -> None:
     media = Path(sys.argv[1])
     OUT.mkdir(parents=True, exist_ok=True)
-    run_case("reel", STILLS + [media / "song.m4a"], "make an energetic reel with music")
-    run_case("cinematic", [STILLS[0], STILLS[1], media / "talking.mp4", STILLS[2], STILLS[4]],
-             'cinematic travel video with subtitles titled "Lakes of the North"')
+    global ONLY
+    ONLY = sys.argv[2] if len(sys.argv) > 2 else None
+    if (media / "CREDITS.txt").exists():  # real stock footage (demo/stock)
+        clips = ["beach_drone.webm", "waves_vertical.webm", "city_timelapse.webm", "viaduct_timelapse.webm", "mountain_snow.webm"]
+        run_case("real_reel", [media / c for c in clips] + [media / "music_upbeat.mp3"], "make an energetic travel reel with music")
+        run_case("real_cinematic", [media / c for c in ("mountain_snow.webm", "beach_drone.webm", "interview.webm", "city_timelapse.webm")],
+                 'cinematic video with subtitles titled "Out There"')
+    else:
+        run_case("reel", STILLS + [media / "song.m4a"], "make an energetic reel with music")
+        run_case("cinematic", [STILLS[0], STILLS[1], media / "talking.mp4", STILLS[2], STILLS[4]],
+                 'cinematic travel video with subtitles titled "Lakes of the North"')
     shutil.rmtree(OUT / "work", ignore_errors=True)
 
 

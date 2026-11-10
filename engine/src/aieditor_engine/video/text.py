@@ -102,9 +102,11 @@ def _anchor_y(position: str, h: int, block_h: int, portrait: bool) -> int:
     return int(h * (0.76 if portrait else 0.9)) - block_h
 
 
-def draw_text(frame: np.ndarray, text: str, style_name: str, position: str | None, age: float, remaining: float) -> None:
+def draw_text(frame: np.ndarray, text: str, style_name: str, position: str | None, age: float, remaining: float,
+              bar: int = 0) -> None:
     """Draw one caption onto a uint8 RGB frame in place. age/remaining (seconds)
-    drive fade and pop animations."""
+    drive fade and pop animations. bar = letterbox bar height: low captions move
+    into the bottom bar (film convention) so they never cover the picture."""
     st = STYLES.get(style_name, STYLES["clean"])
     h, w = frame.shape[:2]
     short = min(w, h)
@@ -133,7 +135,17 @@ def draw_text(frame: np.ndarray, text: str, style_name: str, position: str | Non
     widths = [_line_width(font, ln, px, st.tracking) for ln in lines]
     line_h = int(px * 1.22)
     block_h = line_h * len(lines)
-    y0 = _anchor_y(position or st.position, h, block_h, portrait)
+    pos = position or st.position
+    y0 = _anchor_y(pos, h, block_h, portrait)
+    if bar and not portrait and pos in ("bottom", "lower_third"):
+        if block_h > bar * 0.86 and px * bar * 0.86 / block_h >= short * 0.03:  # shrink a little to fit the bar
+            px = int(px * bar * 0.86 / block_h)
+            font = _font(st.family, st.weight, px)
+            widths = [_line_width(font, ln, px, st.tracking) for ln in lines]
+            line_h = int(px * 1.22)
+            block_h = line_h * len(lines)
+        if block_h <= bar * 0.9:
+            y0 = h - bar + (bar - block_h) // 2
 
     pad = int(px * 0.6)
     bx0 = max(0, (w - max(widths)) // 2 - pad)

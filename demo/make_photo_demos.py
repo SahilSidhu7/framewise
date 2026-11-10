@@ -35,10 +35,21 @@ CASES = [
     ("degraded", "fix it"),
 ]
 
+# Real camera photos (Wikimedia Commons, see demo/stock/CREDITS.txt); used when a stock dir is given.
+STOCK_CASES = [
+    ("portrait.jpg", "make it look like a magazine portrait"),
+    ("desert_portrait.jpg", "warm golden hour, a bit dreamy"),
+    ("food.jpg", "make the food look delicious"),
+    ("pastry.jpg", "moody dark aesthetic"),
+    ("portrait.jpg", "black and white, dramatic"),
+    ("degraded", "fix it"),
+]
+DEGRADE_FROM = WALL / "Wallpaper/ThemeC/img29.jpg"
+
 
 def degraded_source(dst: Path) -> Path:
     """A 'bad phone photo': underexposed, blue cast, tilted 3 degrees."""
-    img = cv2.imread(str(WALL / "Wallpaper/ThemeC/img29.jpg"))
+    img = cv2.imread(str(DEGRADE_FROM))
     h, w = img.shape[:2]
     m = cv2.getRotationMatrix2D((w / 2, h / 2), 3.0, 1.08)
     img = cv2.warpAffine(img, m, (w, h), borderMode=cv2.BORDER_REFLECT)
@@ -77,11 +88,17 @@ def sheet(before: np.ndarray, after: np.ndarray, prompt: str, program: str, rati
 
 
 def main() -> None:
+    global DEGRADE_FROM
+    cases, prefix = CASES, "photo"
+    if len(sys.argv) > 1:  # stock dir of real photos
+        stock = Path(sys.argv[1])
+        cases = [(s if s == "degraded" else stock / s, p) for s, p in STOCK_CASES]
+        DEGRADE_FROM, prefix = stock / "food.jpg", "real"
     OUT.mkdir(parents=True, exist_ok=True)
     work = OUT / "work"
     work.mkdir(exist_ok=True)
     results = []
-    for i, (src, prompt) in enumerate(CASES, start=1):
+    for i, (src, prompt) in enumerate(cases, start=1):
         if src == "degraded":
             src = degraded_source(work / "bad_phone_photo.jpg")
         t = time.time()
@@ -92,7 +109,7 @@ def main() -> None:
         img = load_linear(src, 2400)
         before = to_display(img)
         after = to_display(apply_stack(img, ops))
-        name = f"photo_{i}_{prompt.split(',')[0].replace(' ', '_')[:28]}.jpg"
+        name = f"{prefix}_{i}_{prompt.split(',')[0].replace(' ', '_')[:28]}.jpg"
         sheet(before, after, prompt, v["program"], v["rationale"] or "-", OUT / name)
         dt = time.time() - t
         results.append((name, prompt, v["source"], v["program"].replace("\n", " | "), analysis["notes"], dt))
