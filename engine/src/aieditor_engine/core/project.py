@@ -14,7 +14,7 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2  # v2: layered clips (transform, opacity, blend, crop, keyframes), track flags, markers
 
 
 def new_id(prefix: str) -> str:
@@ -81,6 +81,59 @@ class Transition(BaseModel):
     duration: float = Field(0.5, gt=0, le=5)
 
 
+BlendMode = Literal["normal", "add", "screen", "multiply", "overlay"]
+Easing = Literal["linear", "ease", "hold"]
+# clip parameters that can be animated with keyframes
+KEYABLE = ("x", "y", "scale", "rotation", "opacity", "volume")
+
+
+class Transform(BaseModel):
+    """Placement of a layer on the canvas, applied after fit/fill and motion."""
+
+    x: float = Field(0.0, ge=-4, le=4, description="Offset right, as a fraction of canvas width")
+    y: float = Field(0.0, ge=-4, le=4, description="Offset down, as a fraction of canvas height")
+    scale: float = Field(1.0, gt=0, le=20)
+    rotation: float = Field(0.0, ge=-3600, le=3600, description="Degrees, clockwise")
+
+    @property
+    def is_identity(self) -> bool:
+        return self.x == 0 and self.y == 0 and self.scale == 1 and self.rotation == 0
+
+
+class Crop(BaseModel):
+    """Fractions of the source trimmed from each edge (the rest stays in place)."""
+
+    left: float = Field(0.0, ge=0, le=0.95)
+    top: float = Field(0.0, ge=0, le=0.95)
+    right: float = Field(0.0, ge=0, le=0.95)
+    bottom: float = Field(0.0, ge=0, le=0.95)
+
+    @property
+    def is_empty(self) -> bool:
+        return not (self.left or self.top or self.right or self.bottom)
+
+
+class Keyframe(BaseModel):
+    t: float = Field(ge=0, description="Seconds after the clip's start on the timeline")
+    value: float
+    ease: Easing = Field("ease", description="How the value moves from this keyframe to the next")
+
+
+def keyframe_value(keys: list[Keyframe], t: float) -> float:
+    """Value of an animated parameter t seconds into the clip (keys sorted by t)."""
+    if t <= keys[0].t:
+        return keys[0].value
+    for a, b in zip(keys, keys[1:], strict=False):
+        if t < b.t:
+            if a.ease == "hold" or b.t - a.t < 1e-9:
+                return a.value
+            p = (t - a.t) / (b.t - a.t)
+            if a.ease == "ease":
+                p = p * p * (3 - 2 * p)
+            return a.value + (b.value - a.value) * p
+    return keys[-1].value
+
+
 class Clip(BaseModel):
     id: str
     media_id: str
@@ -96,6 +149,32 @@ class Clip(BaseModel):
     motion: Motion = "none"
     transition: Transition | None = None
     ops: list[EditOp] = Field(default_factory=list, description="Per-clip color/effect stack")
+    # layering (schema v2)
+    transform: Transform = Field(default_factory=Transform)
+    opacity: float = Field(1.0, ge=0, le=1)
+    blend: BlendMode = "normal"
+    crop: Crop = Field(default_factory=Crop)
+    keyframes: dict[str, list[Keyframe]] = Field(default_factory=dict, description="Animated params: " + ", ".join(KEYABLE))
+    link_id: str | None = Field(None, description="Clips sharing a link_id move and trim together (picture + its sound)")
+
+    def value(self, name: str, t: float) -> float:
+        """Animated value of a KEYABLE parameter at timeline time t."""
+        keys = self.keyframes.get(name)
+        if keys:
+            return keyframe_value(keys, t - self.start)
+        if name == "opacity":
+            return self.opacity
+        if name == "volume":
+            return self.volume
+        return float(getattr(self.transform, name))
+
+    @property
+    def is_layered(self) -> bool:
+        """True when the clip may not cover the whole canvas opaquely."""
+        return bool(
+            not self.transform.is_identity or self.opacity < 1 or self.blend != "normal"
+            or not self.crop.is_empty or any(k in self.keyframes for k in ("x", "y", "scale", "rotation", "opacity"))
+        )
 
     @property
     def source_duration(self) -> float:
@@ -121,6 +200,16 @@ class Track(BaseModel):
     kind: Literal["video", "audio", "overlay"] = "video"
     name: str = ""
     clips: list[Clip] = Field(default_factory=list)
+    muted: bool = Field(False, description="Silence every clip on the track")
+    hidden: bool = Field(False, description="Leave the track out of the picture")
+    locked: bool = Field(False, description="Protect the track from edits")
+
+
+class Marker(BaseModel):
+    id: str
+    t: float = Field(ge=0)
+    name: str = Field("", max_length=80)
+    color: str = Field("#f5c542", pattern=r"^#[0-9a-fA-F]{6}$")
 
 
 CaptionStyle = Literal["clean", "bold_pop", "cinematic", "boxed", "title", "minimal"]
@@ -162,6 +251,7 @@ class Project(BaseModel):
     edits: dict[str, list[EditOp]] = Field(default_factory=dict, description="media_id -> photo edit stack")
     grade: list[EditOp] = Field(default_factory=list, description="Video: look/color stack over the whole timeline")
     captions: list[Caption] = Field(default_factory=list)
+    markers: list[Marker] = Field(default_factory=list)
 
     @property
     def duration(self) -> float:

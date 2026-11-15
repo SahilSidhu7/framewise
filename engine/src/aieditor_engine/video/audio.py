@@ -11,7 +11,7 @@ from pathlib import Path
 import av
 import numpy as np
 
-from ..core.project import Clip, MediaKind, Project, Track
+from ..core.project import Clip, MediaKind, Project, Track, keyframe_value
 
 SR = 48000
 DECLICK = 0.005  # seconds of micro-fade at every edit
@@ -82,7 +82,8 @@ def _next_transition(track: Track, clip: Clip) -> float:
 
 def _clip_audio(project: Project, track: Track, clip: Clip, rate: int) -> tuple[int, np.ndarray] | None:
     item = project.media.get(clip.media_id)
-    if item is None or item.kind == MediaKind.IMAGE or clip.muted or clip.volume <= 0:
+    vol_keys = clip.keyframes.get("volume")
+    if item is None or item.kind == MediaKind.IMAGE or clip.muted or track.muted or (clip.volume <= 0 and not vol_keys):
         return None
     if item.kind == MediaKind.VIDEO and not item.has_audio:
         return None
@@ -107,7 +108,13 @@ def _clip_audio(project: Project, track: Track, clip: Clip, rate: int) -> tuple[
     n = seg.shape[1]
     fade_in = int((clip.fade_in + 2 * pre + DECLICK) * rate)
     fade_out = int((clip.fade_out + 2 * post + DECLICK) * rate)
-    seg = seg * _ramp(n, fade_in, fade_out) * clip.volume
+    gain: np.ndarray | float = clip.volume
+    if vol_keys:
+        # volume automation: evaluate every 10 ms of clip time, interpolate per sample
+        ts = np.arange(0.0, n / rate + 0.02, 0.01)
+        vals = np.array([max(0.0, keyframe_value(vol_keys, max(0.0, t - pre))) for t in ts], np.float32)
+        gain = np.interp(np.arange(n) / rate, ts, vals).astype(np.float32)
+    seg = seg * _ramp(n, fade_in, fade_out) * gain
     start = int(round((clip.start - pre) * rate))
     return start, seg
 

@@ -385,3 +385,175 @@ def test_captions_move_into_letterbox_bar() -> None:
     draw_text(frame, "a short line of dialogue for the bar", "cinematic", None, 1.0, 1.0, bar=bar)
     rows = np.nonzero(frame.max(axis=(1, 2)) > 0)[0]
     assert rows.min() >= h - bar and rows.max() < h  # entirely inside the bottom bar
+
+
+# -------------------------------------------------------------------- layers
+
+
+def _lin(u8: np.ndarray) -> np.ndarray:
+    from aieditor_engine.imaging.color import srgb_to_linear
+
+    return srgb_to_linear(u8.astype(np.float32) / 255)
+
+
+def _srgb(lin: np.ndarray) -> np.ndarray:
+    from aieditor_engine.imaging.color import linear_to_srgb
+
+    return linear_to_srgb(np.clip(lin, 0, 1).astype(np.float32)) * 255
+
+
+W, H = 160, 120  # 4:3 like the test clips, so a clip covers the canvas exactly
+FAR = (60, 150)  # a pixel the moving white bar never reaches at the sampled times
+
+
+def _layered(clips, overlay: str) -> Project:
+    p = _project(clips)
+    apply_video_program(p, f"aspect 4:3\nclip 1\noverlay 2 0-2 at=0 {overlay}")
+    return p
+
+
+def _px(p: Project, tmp_path: Path, t: float = 1.0, at: tuple[int, int] = FAR) -> np.ndarray:
+    return render_frame(p, t, W, H, RenderSource(tmp_path))[at].astype(np.float32)
+
+
+def _is_red(v: np.ndarray) -> bool:
+    return bool(v[0] > v[2] + 40)
+
+
+def _is_blue(v: np.ndarray) -> bool:
+    return bool(v[2] > v[0] + 40)
+
+
+def test_layer_opacity_and_blend_modes_match_the_math(clips, tmp_path):
+    base = _project(clips)
+    apply_video_program(base, "aspect 4:3\nclip 1")
+    top = _project(clips)
+    apply_video_program(top, "aspect 4:3\nclip 2")
+    r, b = _lin(_px(base, tmp_path)), _lin(_px(top, tmp_path))
+    assert r[0] > r[2] and b[2] > b[0]
+    expected = {
+        "opacity=1": b,
+        "opacity=0.5": 0.5 * b + 0.5 * r,
+        "opacity=0": r,
+        "blend=add": r + b,
+        "blend=screen": r + b - r * b,
+        "blend=multiply": r * b,
+        "blend=add opacity=0.5": r + 0.5 * b,
+    }
+    for params, lin in expected.items():
+        got = _px(_layered(clips, params), tmp_path)
+        assert np.abs(got - _srgb(lin)).max() <= 3, (params, got, _srgb(lin))
+    # overlay is a contrast blend: the result differs from the base and stays in range
+    ov = _px(_layered(clips, "blend=overlay"), tmp_path)
+    assert np.abs(ov - _srgb(r)).max() > 3 and ov.min() >= 0 and ov.max() <= 255
+
+
+def test_layer_transform_crop_and_hidden_track(clips, tmp_path):
+    base = _project(clips)
+    apply_video_program(base, "aspect 4:3\nclip 1")
+    assert _is_red(_px(base, tmp_path, at=(60, 100)))
+    pip = _layered(clips, "scale=0.5")  # blue picture-in-picture in the middle: x 40-120, y 30-90
+    assert _is_blue(_px(pip, tmp_path, at=(60, 100)))
+    assert _is_red(_px(pip, tmp_path, at=(10, 10))) and _is_red(_px(pip, tmp_path, at=(60, 150)))
+    moved = _layered(clips, "scale=0.5 x=0.25 y=-0.25")  # centre moves to x=120, y=30
+    assert _is_blue(_px(moved, tmp_path, at=(30, 140)))
+    assert _is_red(_px(moved, tmp_path, at=(60, 30))) and _is_red(_px(moved, tmp_path, at=(100, 140)))
+    cropped = _layered(clips, "crop=0.5,0,0,0")  # left half of the layer removed
+    assert _is_red(_px(cropped, tmp_path, at=(100, 20))) and _is_blue(_px(cropped, tmp_path, at=(100, 150)))
+    turned = _layered(clips, "scale=0.5 rotate=90")  # the 80x60 box becomes 60 wide and 80 tall
+    assert _is_blue(_px(turned, tmp_path, at=(25, 80))) and _is_red(_px(turned, tmp_path, at=(60, 45)))
+    pip.tracks[-1].hidden = True
+    assert _is_red(_px(pip, tmp_path, at=(60, 100)))
+
+
+def test_keyframes_animate_layer_and_volume(clips, tmp_path):
+    p = _layered(clips, "opacity=0:0,1:1")
+    ov = next(t for t in p.tracks if t.kind == "overlay").clips[0]
+    assert ov.value("opacity", 0.0) == 0 and ov.value("opacity", 0.5) == pytest.approx(0.5) and ov.value("opacity", 1.7) == 1
+    start, mid, end = (_px(p, tmp_path, t) for t in (0.04, 0.5, 1.5))
+    assert _is_red(start) and _is_blue(end)
+    assert start[2] < mid[2] < end[2] and start[0] > mid[0] > end[0]
+
+    grow = _layered(clips, "scale=0.2>1")
+    k = next(t for t in grow.tracks if t.kind == "overlay").clips[0]
+    assert k.value("scale", 0) == pytest.approx(0.2) and k.value("scale", 2) == pytest.approx(1.0) and 0.2 < k.value("scale", 1) < 1
+    assert _is_red(_px(grow, tmp_path, 0.1, (10, 150))) and _is_blue(_px(grow, tmp_path, 1.95, (10, 150)))
+
+    # volume automation: silent at the start, full after one second
+    q = _project(clips)
+    apply_video_program(q, "clip 1 volume=0:0,1:1")
+    q.settings.normalize_audio = False
+    mix = mix_timeline(q)
+
+    def rms(a: float, b: float) -> float:
+        return float(np.sqrt((mix[:, int(a * 48000) : int(b * 48000)] ** 2).mean()))
+
+    assert rms(0.02, 0.12) < 0.25 * rms(1.3, 1.8)
+    q.tracks[0].muted = True
+    assert not mix_timeline(q).any()
+
+
+LAYER_LINES = (
+    "clip 1 0-2 scale=0:1,2:1.15",
+    "clip 2 0-1.5 transition=crossfade:0.5",
+    "overlay 2 0-1 at=0.5 volume=0.5 x=0.3 y=-0.3 scale=0.3 rotate=10 opacity=0.8 blend=screen crop=0.1,0,0.1,0",
+    "overlay 1 0.5-1.5 at=1 track=2 fade=0.2 mute opacity=0:0,0.5:1",
+)
+
+
+def test_layer_dsl_roundtrip_and_errors(clips):
+    p = _project(clips)
+    apply_video_program(p, "aspect 16:9\n" + "\n".join(LAYER_LINES))
+    kinds = [t.kind for t in p.tracks]
+    assert kinds.count("overlay") == 2 and kinds.index("video") < kinds.index("overlay")
+    dsl = timeline_to_dsl(p)
+    assert dsl.splitlines()[1:5] == list(LAYER_LINES)
+    q = _project(clips)
+    apply_video_program(q, dsl)
+    assert timeline_to_dsl(q) == dsl
+    for bad in ("overlay 2 at=0 blend=glow", "overlay 2 at=0 crop=0.6,0,0.6,0", "overlay 2 at=0 opacity=2",
+                "overlay 2 0-2 at=0\noverlay 1 0-2 at=1", "clip 1 scale=0"):
+        with pytest.raises(VideoDslError):
+            apply_video_program(_project(clips), bad)
+
+
+def test_layer_commands_undo_and_markers(clips):
+    bus = CommandBus(_project(clips))
+    bus.execute("timeline.apply_program", {"program": "clip 1\noverlay 2 0-2 at=0"})
+    ov_track = next(t for t in bus.project.tracks if t.kind == "overlay")
+    cid = ov_track.clips[0].id
+    bus.execute("clip.set_layer", {"clip_id": cid, "scale": 0.4, "x": 0.2, "opacity": 0.7, "blend": "add", "crop_left": 0.1})
+    c = bus.project.find_clip(cid)[1]
+    assert (c.transform.scale, c.transform.x, c.opacity, c.blend, c.crop.left) == (0.4, 0.2, 0.7, "add", 0.1) and c.is_layered
+    keys = [{"t": 1, "value": 90}, {"t": 0, "value": 0, "ease": "linear"}]
+    bus.execute("clip.set_keyframes", {"clip_id": cid, "param": "rotation", "keys": keys})
+    c = bus.project.find_clip(cid)[1]
+    assert [k.t for k in c.keyframes["rotation"]] == [0, 1] and c.value("rotation", 0.5) == pytest.approx(45)
+    with pytest.raises(CommandError):
+        bus.execute("clip.set_keyframes", {"clip_id": cid, "param": "speed", "keys": [{"t": 0, "value": 1}]})
+    with pytest.raises(CommandError):
+        bus.execute("clip.set_keyframes", {"clip_id": cid, "param": "opacity", "keys": [{"t": 0, "value": 3}]})
+    bus.execute("clip.set_keyframes", {"clip_id": cid, "param": "rotation", "keys": []})
+    assert "rotation" not in bus.project.find_clip(cid)[1].keyframes
+    bus.undo()
+    assert "rotation" in bus.project.find_clip(cid)[1].keyframes
+
+    bus.execute("track.set", {"track_id": ov_track.id, "name": "Logo", "hidden": True, "locked": True, "index": 0})
+    assert bus.project.tracks[0].name == "Logo" and bus.project.tracks[0].hidden
+    m = bus.execute("marker.add", {"t": 1.5, "name": "drop"})
+    assert bus.project.markers[0].name == "drop"
+    bus.execute("marker.remove", {"marker_id": m["marker_id"]})
+    assert not bus.project.markers
+    removed = bus.execute("track.remove", {"track_id": ov_track.id})
+    assert removed["clips_removed"] == 1 and all(t.kind != "overlay" for t in bus.project.tracks)
+
+
+def test_v1_project_migrates_to_layers():
+    from aieditor_engine.core.project import SCHEMA_VERSION
+    from aieditor_engine.core.store import migrate
+
+    clip = {"id": "c1", "media_id": "m", "start": 0, "in_point": 0, "out_point": 2, "motion": "zoom_in"}
+    raw = {"schema_version": 1, "name": "old", "kind": "video", "tracks": [{"id": "t1", "kind": "video", "clips": [clip]}]}
+    p = Project.model_validate(migrate(raw))
+    c = p.tracks[0].clips[0]
+    assert p.schema_version == SCHEMA_VERSION == 2 and not c.is_layered and c.blend == "normal" and c.opacity == 1 and p.markers == []

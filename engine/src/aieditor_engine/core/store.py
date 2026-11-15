@@ -20,7 +20,11 @@ from .project import SCHEMA_VERSION, Project, ProjectKind
 PROJECT_FILE = "project.json"
 
 # version -> function upgrading a raw dict from that version to version + 1
-MIGRATIONS: dict[int, Callable[[dict[str, Any]], dict[str, Any]]] = {}
+MIGRATIONS: dict[int, Callable[[dict[str, Any]], dict[str, Any]]] = {
+    # v1 -> v2: layer fields, track flags and markers were added; all have defaults,
+    # so old documents are valid as they are.
+    1: lambda raw: raw,
+}
 
 
 class ProjectPaths:

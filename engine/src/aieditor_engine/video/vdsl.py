@@ -14,6 +14,18 @@
     title "Bali 2026" at=0 dur=2.5 style=title
     captions bold_pop
 
+Layers: a clip can be placed and animated, and `overlay` puts media on a track
+above the main video at a timeline time:
+
+    clip 2 0-6 scale=1>1.15                         # slow push-in over the clip
+    overlay 5 0-4 at=2 scale=0.3 x=0.32 y=-0.3      # picture-in-picture, top right
+    overlay 6 at=1 blend=screen opacity=0.8         # light leak / effect layer
+    overlay 7 at=0 opacity=0:0,0.5:1,3:1,3.5:0      # keyframes as time:value
+
+x / y are fractions of the canvas (0 = centre), rotate is in degrees, crop is
+left,top,right,bottom fractions. Any of x y scale rotate opacity volume takes
+a number, `from>to` (animated across the clip) or `t:v,t:v,...` keyframes.
+
 Media are referenced by their 1-based position in the media bin (or by id).
 Any photo Edit DSL statement (look, adjust, grain, vignette...) becomes part of
 the grade of the whole video. `captions STYLE` turns transcripts into captions.
@@ -28,7 +40,9 @@ from typing import Any
 from ..core.project import (
     Caption,
     Clip,
+    Crop,
     EditOp,
+    Keyframe,
     MediaKind,
     Project,
     Track,
@@ -43,7 +57,8 @@ ASPECTS = {"16:9": (1920, 1080), "9:16": (1080, 1920), "1:1": (1080, 1080), "4:5
 TRANSITIONS = ("crossfade", "fade_black", "fade_white", "wipe_left", "wipe_right", "slide_left", "slide_up", "zoom", "blur")
 MOTIONS = ("none", "zoom_in", "zoom_out", "pan_left", "pan_right")
 CAPTION_STYLES = ("clean", "bold_pop", "cinematic", "boxed", "title", "minimal")
-VIDEO_STATEMENTS = ("aspect", "clip", "music", "letterbox", "fade_in", "fade_out", "title", "text", "captions", "transition", "fps")
+BLENDS = ("normal", "add", "screen", "multiply", "overlay")
+VIDEO_STATEMENTS = ("aspect", "clip", "overlay", "music", "letterbox", "fade_in", "fade_out", "title", "text", "captions", "transition", "fps")
 STILL_SECONDS = 3.0
 
 
@@ -119,12 +134,75 @@ def _range(raw: str) -> tuple[float, float]:
     return a, b
 
 
+_LAYER_LIMITS = {"x": (-4.0, 4.0), "y": (-4.0, 4.0), "scale": (0.01, 20.0), "rotate": (-3600.0, 3600.0), "opacity": (0.0, 1.0), "volume": (0.0, 4.0)}
+
+
+def _animated(raw: str, name: str, duration: float) -> float | list[Keyframe]:
+    """`0.5` -> number; `1>1.2` -> two keyframes across the clip; `0:0,1:1` -> keyframes."""
+    lo, hi = _LAYER_LIMITS[name]
+    if ">" in raw:
+        a, _, b = raw.partition(">")
+        return [Keyframe(t=0.0, value=_num(a, name, lo, hi)), Keyframe(t=max(0.01, duration), value=_num(b, name, lo, hi))]
+    if ":" in raw:
+        keys = []
+        for part in raw.split(","):
+            t, _, v = part.partition(":")
+            keys.append(Keyframe(t=_num(t, f"{name} keyframe time", 0), value=_num(v, name, lo, hi)))
+        return sorted(keys, key=lambda k: k.t)
+    return _num(raw, name, lo, hi)
+
+
+def _apply_layer(clip: Clip, kv: dict[str, str]) -> None:
+    """x= y= scale= rotate= opacity= blend= crop= (and animated volume) on a clip."""
+    for name in ("x", "y", "scale", "rotate", "opacity", "volume"):
+        if name not in kv:
+            continue
+        value = _animated(kv[name], name, clip.duration)
+        param = "rotation" if name == "rotate" else name
+        if isinstance(value, list):
+            clip.keyframes[param] = value
+        elif param in ("opacity", "volume"):
+            setattr(clip, param, value)
+        else:
+            setattr(clip.transform, param, value)
+    if "blend" in kv:
+        if kv["blend"] not in BLENDS:
+            raise VideoDslError(f"blend must be one of {', '.join(BLENDS)}")
+        clip.blend = kv["blend"]  # type: ignore[assignment]
+    if "crop" in kv:
+        parts = kv["crop"].split(",")
+        if len(parts) != 4:
+            raise VideoDslError("crop needs left,top,right,bottom (fractions, e.g. 0.1,0,0.1,0)")
+        left, top, right, bottom = (_num(x, "crop", 0, 0.95) for x in parts)
+        if left + right >= 0.98 or top + bottom >= 0.98:
+            raise VideoDslError("crop removes the whole picture")
+        clip.crop = Crop(left=left, top=top, right=right, bottom=bottom)
+
+
+def _layer_dsl(c: Clip) -> list[str]:
+    """Inverse of _apply_layer (volume is written by the caller)."""
+    parts = []
+    for param, name, default in (("x", "x", 0.0), ("y", "y", 0.0), ("scale", "scale", 1.0), ("rotation", "rotate", 0.0), ("opacity", "opacity", 1.0)):
+        keys = c.keyframes.get(param)
+        if keys:
+            parts.append(f"{name}=" + ",".join(f"{_fmt(k.t)}:{_fmt(k.value)}" for k in keys))
+            continue
+        value = c.opacity if param == "opacity" else getattr(c.transform, param)
+        if abs(value - default) > 1e-9:
+            parts.append(f"{name}={_fmt(value)}")
+    if c.blend != "normal":
+        parts.append(f"blend={c.blend}")
+    if not c.crop.is_empty:
+        parts.append("crop=" + ",".join(_fmt(v) for v in (c.crop.left, c.crop.top, c.crop.right, c.crop.bottom)))
+    return parts
+
+
 def _track(p: Project, kind: str, name: str) -> Track:
     for t in p.tracks:
-        if t.kind == kind and (kind != "audio" or t.name == name):
+        if t.kind == kind and (kind == "video" or t.name == name):
             return t
     t = Track(id=new_id("trk"), kind=kind, name=name)  # type: ignore[arg-type]
-    p.tracks.append(t)
+    p.tracks.append(t)  # list order is the stacking order: later tracks are drawn on top
     return t
 
 
@@ -167,15 +245,15 @@ def apply_video_program(
                 p.settings.width, p.settings.height = ASPECTS[ratio]
             elif name == "fps":
                 p.settings.fps = _num(pos[0] if pos else "", "fps", 12, 120)
-            elif name == "clip":
+            elif name in ("clip", "overlay"):
                 if not pos:
-                    raise VideoDslError("clip needs a media number")
+                    raise VideoDslError(f"{name} needs a media number")
                 media_id = _media(p, pos[0])
                 item = p.media[media_id]
                 if item.kind == MediaKind.AUDIO:
                     raise VideoDslError(f"#{pos[0]} is audio; use `music`")
                 length = item.duration or STILL_SECONDS
-                if len(pos) > 1:
+                if len(pos) > 1 and pos[1] != "mute":
                     a, b = _range(pos[1])
                 elif item.kind == MediaKind.IMAGE:
                     a, b = 0.0, _num(kv.get("dur", str(STILL_SECONDS)), "dur", 0.2, 60)
@@ -186,7 +264,8 @@ def apply_video_program(
                     if b - a < 0.1:
                         raise VideoDslError(f"range is outside the media ({length:.2f}s long)")
                 speed = _num(kv.get("speed", "1"), "speed", 0.1, 10)
-                clip = Clip(id=new_id("clp"), media_id=media_id, start=cursor, in_point=a, out_point=b, speed=speed)
+                at = _num(kv["at"], "at", 0) if name == "overlay" and "at" in kv else (0.0 if name == "overlay" else cursor)
+                clip = Clip(id=new_id("clp"), media_id=media_id, start=at, in_point=a, out_point=b, speed=speed)
                 if "transition" in kv:
                     kind, _, dur = kv["transition"].partition(":")
                     if kind not in TRANSITIONS:
@@ -196,15 +275,24 @@ def apply_video_program(
                     if kv["motion"] not in MOTIONS:
                         raise VideoDslError(f"motion must be one of {', '.join(MOTIONS)}")
                     clip.motion = kv["motion"]  # type: ignore[assignment]
-                if "volume" in kv:
-                    clip.volume = _num(kv["volume"], "volume", 0, 4)
                 if "mute" in pos[1:] or kv.get("mute") in ("true", "1", "yes"):
                     clip.muted = True
                 if "fit" in kv:
                     clip.fit = "fit" if kv["fit"] == "fit" else "fill"
-                video.clips.append(clip)
-                added_clips.append(clip)
-                cursor = clip.end
+                if "fade" in kv:
+                    clip.fade_in = clip.fade_out = min(_num(kv["fade"], "fade", 0, 30), clip.duration / 2)
+                _apply_layer(clip, kv)
+                if name == "overlay":
+                    layer = _num(kv.get("track", "1"), "track", 1, 8)
+                    target = _track(p, "overlay", f"Overlay {int(layer)}")
+                    if any(c.start < clip.end and clip.start < c.end for c in target.clips):
+                        raise VideoDslError(f"overlaps another clip on overlay track {int(layer)}; use track={int(layer) + 1}")
+                    target.clips.append(clip)
+                    target.clips.sort(key=lambda c: c.start)
+                else:
+                    video.clips.append(clip)
+                    added_clips.append(clip)
+                    cursor = clip.end
             elif name == "music":
                 if not pos:
                     raise VideoDslError("music needs a media number")
@@ -275,6 +363,12 @@ def apply_video_program(
                 p.grade = [o for o in p.grade if o.op != "look"]
             p.grade.extend(ops)
     video.clips.sort(key=lambda c: c.start)
+    # stacking order: main video at the bottom, overlay tracks by number, audio last
+    def _stack(t: Track) -> tuple[int, int]:
+        n = t.name.rsplit(" ", 1)[-1]
+        return ({"video": 0, "overlay": 1, "audio": 2}[t.kind], int(n) if t.kind == "overlay" and n.isdigit() else 0)
+
+    p.tracks.sort(key=_stack)
     if all_transition and video.clips:
         kind, dur = all_transition
         first = video.clips[0]
@@ -299,6 +393,15 @@ def apply_video_program(
         "captions": sum(1 for c in p.captions if c.kind == "caption"),
         "warnings": ["no transcript available; captions skipped"] if pending_captions and not transcripts else [],
     }
+
+
+def _volume_dsl(c: Clip) -> list[str]:
+    if c.muted:
+        return ["mute"]
+    keys = c.keyframes.get("volume")
+    if keys:
+        return ["volume=" + ",".join(f"{_fmt(k.t)}:{_fmt(k.value)}" for k in keys)]
+    return [f"volume={_fmt(c.volume)}"] if abs(c.volume - 1) > 1e-6 else []
 
 
 def parse_statement_known(name: str) -> bool:
@@ -329,12 +432,25 @@ def timeline_to_dsl(p: Project) -> str:
                     parts.append(f"transition={c.transition.kind}:{_fmt(c.transition.duration)}")
                 if c.motion != "none":
                     parts.append(f"motion={c.motion}")
-                if c.muted:
-                    parts.append("mute")
-                elif abs(c.volume - 1) > 1e-6:
-                    parts.append(f"volume={_fmt(c.volume)}")
+                parts += _volume_dsl(c) + _layer_dsl(c)
                 lines.append(" ".join(parts))
             break
+    for t in p.tracks:
+        if t.kind != "overlay":
+            continue
+        layer = t.name.rsplit(" ", 1)[-1] if t.name.startswith("Overlay ") else "1"
+        for c in t.clips:
+            parts = [f"overlay {num.get(c.media_id, c.media_id)} {_fmt(c.in_point)}-{_fmt(c.out_point)} at={_fmt(c.start)}"]
+            if layer != "1":
+                parts.append(f"track={layer}")
+            if abs(c.speed - 1) > 1e-6:
+                parts.append(f"speed={_fmt(c.speed)}")
+            if c.fit != "fill":
+                parts.append(f"fit={c.fit}")
+            if c.fade_in and abs(c.fade_in - c.fade_out) < 1e-6:
+                parts.append(f"fade={_fmt(c.fade_in)}")
+            parts += _volume_dsl(c) + _layer_dsl(c)
+            lines.append(" ".join(parts))
     for t in p.tracks:
         if t.kind == "audio" and t.name == "Music":
             for c in t.clips[:1]:

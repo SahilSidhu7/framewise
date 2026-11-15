@@ -366,23 +366,56 @@ AIEditor/
 
 ---
 
-## 12. Roadmap
-| # | Milestone | Weeks |
-|---|---|---|
-| M0 | Foundations: command bus, project model, FastAPI, Tauri shell, media import + proxies, CI for 3 platforms, packaging pipeline, backend abstraction | 3 |
-| M1 | Photo engine: float pipeline, OCIO, 20 tools, 15 recipes, DSL + compiler | 3 |
-| M2 | Perception specialists + Media Brief + aesthetic scorer | 2 |
-| M3 | **EditLM v0:** eval harness + **bake-off A/B/C** with off-the-shelf models + DSL grammar | 3 |
-| M4 | Simple-mode UI, variations, templates, collage | 3 |
-| M5 | Editing Playbook + Edit Linter + trajectory recorder; hire editors for gold set; datagen + teacher + execution filtering (photo) | 5 |
-| M6 | **EditLM v1:** projector + SFT on photo; NVIDIA-judge DPO; LoRA variants + mergekit; quantize | 3 |
-| M7 | **Photo public beta:** installer, downloader, onboarding, opt-in crash reports | 2 |
-| M8 | Video engine: timeline, transitions, audio, captions, export quality | 5 |
-| M9 | Video datagen + **EditLM v2:** SFT + GRPO with NVIDIA-judge rewards, hard-case distillation, merge | 5 |
-| M10 | VFX pack + Enhance export pass | 4 |
-| M11 | **1.0:** license audit, signing, QA hardware matrix (NVIDIA, AMD, Intel Arc, iGPU, M1/M3), docs, launch | 3 |
+## 12. Roadmap (revised 2026-11-14)
 
-**About 41 weeks solo**, plus a freelancer budget for the gold set (roughly $3k to $8k, scalable). The first AI photo demo (off-the-shelf model) arrives at M4, about 14 weeks in.
+### 12.1 Done
+| # | Milestone | State |
+|---|---|---|
+| M0 | Foundations: command bus, project model, FastAPI, Tauri shell, media import + proxies, CI | done |
+| M1 + AI v0 | Photo engine, looks, Edit DSL, local EditLM (off-the-shelf model), photo editor UI | done |
+| Video v1 | Timeline compositor, transitions, audio mix, captions (whisper), AI director, export, video editor UI | done |
+
+### 12.2 Gap analysis: what the product goal still needs
+Goal: usable by a 10-year-old with professional-looking results, automatic highlights and reels, drivable by n8n and similar tools, a layered movie timeline, then superpower VFX.
+
+| Area | Have | Missing |
+|---|---|---|
+| Timeline model | tracks, clips with trim/speed/fades/motion/transitions, captions, project grade | layers are opaque: no opacity, blend modes, transforms, keyframes, masks, linked audio, markers, nested sequences |
+| Rendering | CPU float pipeline, LUT grade, parallel export, NVENC | slower than real time; no GPU compositor or render cache |
+| AI | rules + small local LLM writing the Edit DSL | no highlight detection on long footage, auto-reframe, silence removal, take selection |
+| API | local token API bound to one open project | no headless mode, API keys, webhooks, job API, CLI, n8n node |
+| UI | one editor with tabs, prompt + 3 variations | no kid mode, style/output options, multi-track or keyframe UI |
+| VFX | none | everything |
+
+Key finding: a layered compositor with transforms, blend modes and keyframes is the shared foundation for reframing, the movie timeline and VFX.
+
+### 12.3 Market finding and order
+A do-everything editor cannot beat CapCut, Adobe or free DaVinci Resolve head-on. The open gaps are local/private/no-subscription editing with good AI, and automation: no mainstream editor has a local API, and cloud clipping tools charge per minute. **Decision: lead with the automation engine.** See `BUSINESS.md` for the earning model and marketing.
+
+| # | Phase | Contents | Weeks |
+|---|---|---|---|
+| A1 | Layer foundation (CPU) | clip transform, opacity, blend modes, crop, keyframes, schema migration; alpha compositing; DSL + commands | 2 |
+| C | Automatic editing | highlight scoring (transcript, audio, visual), auto-reframe to 9:16 / 1:1, silence and filler removal, reel recipes, animated word captions; Edit Linter; collage as a photo output | 4 |
+| C+ | Prompt options | editing style presets (cinematic, reel, vlog, sports...) incl. "edit like this" reference video; desired output (platform, length, versions, captions, music, quality); YAML presets feeding the existing hints | 1 |
+| D | Automation API | headless server, session registry, public job API `/v1/jobs`, webhooks, API keys, OpenAPI, CLI, n8n community node, MCP server, watch folders; trajectory recorder | 3 |
+| R1 | **First public release (Windows)** | signed installer, auto-update, bundled whisper, first-run model downloader, hardware benchmark, onboarding, LGPL FFmpeg build, licence audit, opt-in crash reports | 2 |
+| A2 | GPU foundation | moderngl compositor, render cache, real-time preview; Enhance pass (upscale, interpolation, denoise); 10-bit / HDR, OpenColorIO | 4 |
+| B | Movie timeline | multi-track UI, trims, linked audio, keyframe lanes, markers, nested sequences; raw footage to movie (scenes, takes, multicam/audio sync, script matching); OTIO / FCPXML / EDL export | 5 |
+| T | EditLM training (parallel with A2/B) | playbook, datagen, SFT, GRPO with NVIDIA judge, merge, quantize (sections 4 and 5) | 8 |
+| E | Kid mode | Magic mode, voice requests, "change it" buttons, coach tips, asset packs; offline, no account | 4 |
+| F | VFX superpowers | hand/body/point tracking, segmentation + depth occlusion, lightning / fire / energy shaders, relighting, shake, SFX; one-tap powers; C2PA credentials | 8 |
+| Later | | plugin SDK, generative tier (FLUX-schnell), macOS Apple Silicon, Linux | |
+
+**About 33 weeks solo to the end of F** (EditLM training runs alongside), first sellable release after about 12 weeks (end of R1).
+
+### 12.4 Phase details
+- **A1:** `Clip` gains `transform` (x, y, scale, rotation), `opacity`, `blend` (normal, add, screen, multiply, overlay), `crop` and `keyframes`; `Clip.link_id`, `Track.muted/locked`, `Project.markers`. `video/compose.py` composites tracks bottom to top with alpha instead of "upper covers lower". The CPU compositor stays the reference implementation for the later GPU path.
+- **C:** per-second signals (LLM-scored transcript sentences, laughter/cheer/loudness peaks, motion, scene changes, faces) are fused into ranked moments; one long video in, N ranked reels out, each with a title and a reason. Auto-reframe tracks the main subject and writes transform keyframes.
+- **C+:** `StyleSpec` and `OutputSpec` pre-fill the planner hints, so explicit options are hard constraints and the prompt fills what is left on Auto. Presets live in `engine/src/aieditor_engine/styles/*.yaml`.
+- **D:** `POST /v1/jobs {inputs, recipe or prompt, style, output}`, `GET /v1/jobs/{id}`, result download, cancel; HMAC-signed webhooks; recipes `highlights`, `reel`, `captions`, `photo_edit`, `render_program`, `assemble`. Localhost by default, opt-in LAN binding.
+- **B:** scenes and takes grouped by transcript and visual similarity, best take chosen by sharpness, fluency and loudness; separate recorders and cameras synced by audio cross-correlation; an optional pasted script orders the rough cut.
+- **E:** three steps (pick clips, pick a style card with live preview, done). The child never needs a tool name. No telemetry in kid mode (COPPA / GDPR-K).
+- **F:** effects are layers with additive blending attached to tracked points (MediaPipe hands/pose, optical flow); person mask and depth put effects behind or in front of the actor; the effect's colour relights the actor. DSL: `vfx lightning from=hand_r to=point(x,y) at=3.2 dur=0.8`.
 
 ---
 
@@ -410,8 +443,8 @@ AIEditor/
 
 ---
 
-## 15. Next steps (M0)
-1. Scaffold `engine/`: FastAPI, Pydantic project model, command bus + undo, trajectory log.
-2. Scaffold `app/`: Tauri 2 + React, talking to the engine over WebSocket.
-3. Media import + proxy generation (FFmpeg).
-4. Set up GitHub Actions to build Windows/macOS/Linux, plus a packaging smoke test.
+## 15. Next steps (A1)
+1. Schema v-next: layer fields on `Clip`, migration for existing projects.
+2. Alpha / blend / transform compositing in `video/compose.py`, keyframe evaluation.
+3. DSL statements and commands for layers; tests against hand-computed pixels.
+4. Then phase C (highlights, reframe, reels) with the prompt options.

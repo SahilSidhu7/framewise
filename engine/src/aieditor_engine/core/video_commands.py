@@ -11,11 +11,15 @@ from ..dsl import DslError, compile_program
 from .commands import CommandError, command
 from .photo_commands import _validated
 from .project import (
+    KEYABLE,
+    BlendMode,
     Caption,
     CaptionPosition,
     CaptionStyle,
     Clip,
     EditOp,
+    Keyframe,
+    Marker,
     Motion,
     Project,
     Track,
@@ -334,3 +338,120 @@ def timeline_apply_program(p: Project, a: VideoProgramParams) -> dict:
         return apply_video_program(p, a.program, replace=a.mode == "replace", transcripts=a.transcripts)
     except VideoDslError as exc:
         raise CommandError(str(exc)) from exc
+
+
+# ------------------------------------------------------------------ layers
+
+
+class ClipLayerParams(BaseModel):
+    clip_id: str
+    x: float | None = Field(None, ge=-4, le=4, description="Offset right, fraction of canvas width")
+    y: float | None = Field(None, ge=-4, le=4, description="Offset down, fraction of canvas height")
+    scale: float | None = Field(None, gt=0, le=20)
+    rotation: float | None = Field(None, ge=-3600, le=3600, description="Degrees, clockwise")
+    opacity: float | None = Field(None, ge=0, le=1)
+    blend: BlendMode | None = None
+    crop_left: float | None = Field(None, ge=0, le=0.95)
+    crop_top: float | None = Field(None, ge=0, le=0.95)
+    crop_right: float | None = Field(None, ge=0, le=0.95)
+    crop_bottom: float | None = Field(None, ge=0, le=0.95)
+
+
+@command("clip.set_layer", ClipLayerParams, "Place a clip as a layer: position, size, rotation, opacity, blend mode, crop.", "timeline")
+def clip_set_layer(p: Project, a: ClipLayerParams) -> None:
+    _, clip = p.find_clip(a.clip_id)
+    for key in ("x", "y", "scale", "rotation"):
+        value = getattr(a, key)
+        if value is not None:
+            setattr(clip.transform, key, value)
+    if a.opacity is not None:
+        clip.opacity = a.opacity
+    if a.blend is not None:
+        clip.blend = a.blend
+    for side in ("left", "top", "right", "bottom"):
+        value = getattr(a, f"crop_{side}")
+        if value is not None:
+            setattr(clip.crop, side, value)
+    if clip.crop.left + clip.crop.right >= 0.98 or clip.crop.top + clip.crop.bottom >= 0.98:
+        raise CommandError("crop removes the whole picture")
+
+
+class KeyframesParams(BaseModel):
+    clip_id: str
+    param: str = Field(description="One of: " + ", ".join(KEYABLE))
+    keys: list[Keyframe] = Field(description="Empty list removes the animation")
+
+
+@command("clip.set_keyframes", KeyframesParams, "Animate a clip parameter over time (replaces its keyframes).", "timeline")
+def clip_set_keyframes(p: Project, a: KeyframesParams) -> None:
+    _, clip = p.find_clip(a.clip_id)
+    if a.param not in KEYABLE:
+        raise CommandError(f"cannot animate `{a.param}`; choose one of {', '.join(KEYABLE)}")
+    if not a.keys:
+        clip.keyframes.pop(a.param, None)
+        return
+    limits = {"opacity": (0.0, 1.0), "volume": (0.0, 4.0), "scale": (0.01, 20.0), "x": (-4.0, 4.0), "y": (-4.0, 4.0)}
+    lo, hi = limits.get(a.param, (-3600.0, 3600.0))
+    keys = sorted(a.keys, key=lambda k: k.t)
+    for k in keys:
+        if not lo <= k.value <= hi:
+            raise CommandError(f"{a.param} must be between {lo:g} and {hi:g}")
+    clip.keyframes[a.param] = keys
+
+
+class TrackSetParams(BaseModel):
+    track_id: str
+    name: str | None = Field(None, max_length=40)
+    muted: bool | None = None
+    hidden: bool | None = None
+    locked: bool | None = None
+    index: int | None = Field(None, ge=0, description="New position in the stack (0 = bottom)")
+
+
+@command("track.set", TrackSetParams, "Rename, mute, hide, lock or reorder a track.", "timeline")
+def track_set(p: Project, a: TrackSetParams) -> None:
+    track = p.find_track(a.track_id)
+    for key in ("name", "muted", "hidden", "locked"):
+        value = getattr(a, key)
+        if value is not None:
+            setattr(track, key, value)
+    if a.index is not None:
+        p.tracks.remove(track)
+        p.tracks.insert(min(a.index, len(p.tracks)), track)
+
+
+class TrackRemoveParams(BaseModel):
+    track_id: str
+
+
+@command("track.remove", TrackRemoveParams, "Delete a track and the clips on it.", "timeline")
+def track_remove(p: Project, a: TrackRemoveParams) -> dict:
+    track = p.find_track(a.track_id)
+    p.tracks.remove(track)
+    return {"clips_removed": len(track.clips)}
+
+
+class MarkerAddParams(BaseModel):
+    t: float = Field(ge=0)
+    name: str = Field("", max_length=80)
+    color: str = Field("#f5c542", pattern=r"^#[0-9a-fA-F]{6}$")
+
+
+@command("marker.add", MarkerAddParams, "Drop a named marker on the timeline.", "timeline")
+def marker_add(p: Project, a: MarkerAddParams) -> dict:
+    m = Marker(id=new_id("mrk"), t=a.t, name=a.name, color=a.color)
+    p.markers.append(m)
+    p.markers.sort(key=lambda x: x.t)
+    return {"marker_id": m.id}
+
+
+class MarkerRemoveParams(BaseModel):
+    marker_id: str
+
+
+@command("marker.remove", MarkerRemoveParams, "Delete a marker.", "timeline")
+def marker_remove(p: Project, a: MarkerRemoveParams) -> None:
+    before = len(p.markers)
+    p.markers = [m for m in p.markers if m.id != a.marker_id]
+    if len(p.markers) == before:
+        raise CommandError("marker not found")
