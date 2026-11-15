@@ -1,0 +1,111 @@
+# Editing styles for video: "how it should feel".
+# Each style fixes the director's choices; the prompt only fills what a style leaves out.
+#   pace: fast | medium | slow        transition: none | crossfade | fade_black | zoom | ...
+#   looks: allowed looks, best first  captions: caption style used when captions are on
+#   music: auto (use it when it fits) | on | off
+#   letterbox: cinematic bars (16:9 only)   highlights: prefer the best moments over full clips
+cinematic:
+  title: Cinematic
+  description: Slow, smooth, movie colour and bars.
+  pace: slow
+  transition: crossfade
+  looks: [teal_orange_cinematic, film_portra, moody_dark]
+  captions: cinematic
+  letterbox: 2.39
+  music: auto
+energetic_reel:
+  title: Energetic reel
+  description: Fast cuts on the beat, punchy colour, big captions.
+  pace: fast
+  transition: none
+  looks: [vivid_pop, golden_hour]
+  captions: bold_pop
+  highlights: true
+  music: auto
+vlog:
+  title: Vlog
+  description: Natural colour, easy pace, clean subtitles.
+  pace: medium
+  transition: none
+  looks: [film_portra, bright_airy]
+  captions: clean
+  music: auto
+documentary:
+  title: Documentary
+  description: Calm and honest; the speech leads.
+  pace: slow
+  transition: crossfade
+  looks: [film_portra, faded_film]
+  captions: clean
+  music: auto
+travel:
+  title: Travel
+  description: Colourful scenery with smooth transitions.
+  pace: medium
+  transition: crossfade
+  looks: [vivid_pop, golden_hour, teal_orange_cinematic]
+  captions: clean
+  highlights: true
+  music: auto
+funny:
+  title: Funny / meme
+  description: Quick cuts and loud captions.
+  pace: fast
+  transition: none
+  looks: [vivid_pop]
+  captions: bold_pop
+  highlights: true
+  music: auto
+gaming:
+  title: Gaming
+  description: Fast highlights with neon punch.
+  pace: fast
+  transition: none
+  looks: [vivid_pop, cyberpunk]
+  captions: bold_pop
+  highlights: true
+  music: auto
+sports_highlights:
+  title: Sports highlights
+  description: The best plays, cut hard.
+  pace: fast
+  transition: none
+  looks: [vivid_pop]
+  captions: bold_pop
+  highlights: true
+  music: auto
+tutorial:
+  title: Tutorial
+  description: Clear and bright; nothing distracting.
+  pace: medium
+  transition: none
+  looks: [bright_airy]
+  captions: boxed
+  music: "off"
+trailer:
+  title: Trailer
+  description: Dramatic dips to black, dark movie colour.
+  pace: medium
+  transition: fade_black
+  looks: [teal_orange_cinematic, moody_dark]
+  captions: cinematic
+  letterbox: 2.39
+  highlights: true
+  music: auto
+music_video:
+  title: Music video
+  description: Cut to every beat, glowing colour.
+  pace: fast
+  transition: none
+  looks: [halation_film, vivid_pop, vhs_90s]
+  captions: bold_pop
+  highlights: true
+  music: "on"
+calm_aesthetic:
+  title: Calm / aesthetic
+  description: Soft pastel tones and slow fades.
+  pace: slow
+  transition: crossfade
+  looks: [aesthetic_soft, pastel, dreamy_glow]
+  captions: minimal
+  music: auto

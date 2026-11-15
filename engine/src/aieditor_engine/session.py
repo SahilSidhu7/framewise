@@ -23,7 +23,7 @@ from .media.proxy import ProxyError, make_proxy
 log = logging.getLogger(__name__)
 
 
-ANALYSIS_VERSION = 2
+ANALYSIS_VERSION = 3
 
 
 class Session:
@@ -147,6 +147,21 @@ class Session:
 
         return self._cached("analysis", media_id, compute)
 
+    def subject_track(self, media_id: str) -> dict[str, Any] | None:
+        """Where the subject is over time (for auto-reframe); None for non-videos."""
+        from .video.reframe import subject_track
+
+        item = self.bus.project.media.get(media_id)
+        if item is None or item.kind != MediaKind.VIDEO:
+            return None
+        with self._video_lock:
+            return self._cached("subjects", media_id, subject_track)
+
+    @property
+    def styles_dir(self) -> Path:
+        """Styles saved for this project ("edit like this")."""
+        return self.paths.root / "styles"
+
     def music_analysis(self, media_id: str) -> dict[str, Any]:
         from .video.analysis import analyze_music
 
@@ -211,7 +226,7 @@ class Session:
                     mu = self.music_analysis(mid)
                     infos.append(MediaInfo(n, mid, item.name, "audio", item.duration or mu["duration"], music=mu))
         has_edit = any(t.clips for t in project.tracks)
-        return VideoContext(infos, timeline_to_dsl(project) if has_edit else "")
+        return VideoContext(infos, timeline_to_dsl(project) if has_edit else "", subject_of=self.subject_track)
 
     # ---------------------------------------------------------- render jobs
     def start_job(self, kind: str, fn: Callable[..., Any], *, label: str = "") -> str:

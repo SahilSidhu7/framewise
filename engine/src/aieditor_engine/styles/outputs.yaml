@@ -1,0 +1,16 @@
+# Desired output: where the result is going. Sets aspect, a sensible length cap and the export preset.
+video:
+  instagram_reel: {title: Instagram Reel, aspect: "9:16", max_length: 90, default_length: 30, export: reel_1080}
+  tiktok: {title: TikTok, aspect: "9:16", max_length: 60, default_length: 30, export: reel_1080}
+  youtube_short: {title: YouTube Short, aspect: "9:16", max_length: 60, default_length: 40, export: reel_1080}
+  story: {title: Story, aspect: "9:16", max_length: 15, default_length: 15, export: reel_1080}
+  youtube: {title: YouTube, aspect: "16:9", export: youtube_1080p}
+  square_post: {title: Square post, aspect: "1:1", max_length: 60, export: square_1080}
+  portrait_post: {title: Portrait post (4:5), aspect: "4:5", max_length: 60, export: portrait_4_5}
+  movie: {title: Movie, aspect: "16:9", export: youtube_1080p}
+photo:
+  instagram_post: {title: Instagram post (4:5), aspect: "4:5"}
+  story: {title: Story (9:16), aspect: "9:16"}
+  square: {title: Square, aspect: "1:1"}
+  wallpaper: {title: Wallpaper (16:9), aspect: "16:9"}
+  print: {title: Print (keep shape)}

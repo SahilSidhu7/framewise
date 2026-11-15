@@ -341,6 +341,20 @@ def test_video_api_flow(clips, tmp_path):
         assert f.status_code == 200 and f.headers["content-type"] == "image/jpeg"
         assert c.post("/ai/video/apply", json={"program": prog}, headers=h).status_code == 200
         assert c.get("/timeline/dsl", headers=h).json()["duration"] > 0
+        # prompt options, reels and "edit like this"
+        opts = c.get("/ai/options", headers=h).json()
+        assert {s["id"] for s in opts["video"]["styles"]} >= {"cinematic", "energetic_reel"}
+        styled = c.post("/ai/video", json={"prompt": "edit this", "style": "cinematic", "output": {"platform": "square_post", "versions": 2}}, headers=h).json()
+        assert len(styled["variations"]) == 2 and all("aspect 1:1" in v["program"] for v in styled["variations"])
+        assert c.post("/ai/video", json={"prompt": "x", "style": "nope"}, headers=h).status_code == 422
+        reels = c.post("/ai/reels", json={"count": 2, "length": 5, "output": {"platform": "tiktok"}}, headers=h).json()
+        assert reels["aspect"] == "9:16" and reels["variations"] and "aspect 9:16" in reels["variations"][0]["program"]
+        assert c.post("/ai/video/apply", json={"program": reels["variations"][0]["program"]}, headers=h).status_code == 200
+        st = c.post("/ai/styles/from_video", json={"media_number": 1, "name": "Red test"}, headers=h).json()
+        assert st["id"] == "red_test" and any(s["id"] == "red_test" for s in c.get("/ai/options", headers=h).json()["video"]["styles"])
+        assert c.post("/ai/styles/from_video", json={"media_number": 3, "name": "song"}, headers=h).status_code == 422
+        photo = c.post("/ai/video", json={"prompt": "x", "output": {"platform": "instagram_post"}}, headers=h)
+        assert photo.status_code == 422  # a photo output is not a video output
         assert c.get("/timeline/frame", params={"t": 0.5, "max": 200, "grade": "look noir"}, headers=h).status_code == 200
         bad = c.get("/timeline/frame", params={"t": 0, "grade": "look nope"}, headers=h)
         assert bad.status_code == 422

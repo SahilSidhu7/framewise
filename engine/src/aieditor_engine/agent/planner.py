@@ -312,9 +312,18 @@ def sanitize(ops: list[dict[str, Any]], analysis: dict[str, Any], hints: Hints) 
     return out, fixed
 
 
-def plan(prompt: str, analysis: dict[str, Any], current_program: str = "", variations: int = 3) -> dict[str, Any]:
+def plan(
+    prompt: str, analysis: dict[str, Any], current_program: str = "", variations: int = 3,
+    style: str | None = None, output: Any = None,
+) -> dict[str, Any]:
+    """style / output are the optional prompt options (agent/options.py)."""
+    from .options import apply_photo_options, photo_rule_words
+
     brief = media_brief(analysis, current_program)
-    hints = request_hints(prompt, analysis, current_program)
+    hints = apply_photo_options(request_hints(prompt, analysis, current_program), style, output)
+    if output is not None and getattr(output, "versions", None):
+        variations = output.versions
+    rule_prompt = prompt + photo_rule_words(prompt, style, output)
     results: list[Variation] = []
     llm_error = None
     if LLM.available():
@@ -326,7 +335,7 @@ def plan(prompt: str, analysis: dict[str, Any], current_program: str = "", varia
     # Top up with rule-based options so the user always gets a choice.
     if len(results) < variations:
         seen = {v.program for v in results}
-        for v in plan_rules(prompt, analysis, current_program, variations + 2):
+        for v in plan_rules(rule_prompt, analysis, current_program, variations + 2):
             if v.program not in seen and len(results) < variations:
                 results.append(v)
                 seen.add(v.program)
@@ -373,6 +382,9 @@ def _plan_llm(prompt: str, brief: str, hints: Hints, analysis: dict[str, Any], n
             if op_name not in present and wants(pattern, hints.text):
                 ops.extend(compile_lenient(stmt)[0])
                 warnings.append(f"added requested {op_name}")
+        if hints.aspect and "crop" not in present:  # the user asked for this shape; the model forgot it
+            ops.extend(compile_lenient(f"crop aspect={hints.aspect}")[0])
+            warnings.append("added requested crop")
         if not ops:
             continue
         program = to_dsl(ops)

@@ -97,5 +97,9 @@ cd ../app && npx tauri build --config src-tauri/tauri.bundle.conf.json
 | POST | `/media/import` | probe files, add them to the bin, queue thumbnails and proxies |
 | GET | `/media/{id}/thumb` · `/media/{id}/proxy` | derived files |
 | WS | `/ws` | live events: command, undo, redo, media_updated, proxy_progress, project_opened |
+| GET | `/ai/options` | editing styles and desired outputs (platform, length, captions, music) for the prompt options |
+| POST | `/ai/edit` · `/ai/video` | plan photo / video edits from a prompt plus optional `style` and `output`; returns variations, applies nothing |
+| POST | `/ai/reels` | best moments of one long video as ready short clips: sentence-aligned, pauses and fillers cut, speaker kept in frame |
+| POST | `/ai/styles/from_video` | "edit like this": measure a reference video and save it as a reusable style |
 
 Every command, from a person or the AI, is appended to `logs/trajectory.jsonl` in the project folder. That log is EditLM training data.

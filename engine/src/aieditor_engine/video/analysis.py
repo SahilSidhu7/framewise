@@ -215,6 +215,7 @@ def analyze_audio_track(path: Path) -> dict[str, Any]:
         "has_audio": True,
         "loudness_db": round(float(20 * np.log10(max(rms, 1e-9))), 1),
         "silent": rms < 0.003,
+        "energy": [round(float(v), 3) for v in _energy_per_second(y, 16000)],  # loudness per second, 0..1
         "speech_likely": bool(rms >= 0.003 and (syllabic > 0.43 or (mod > 0.9 and 0.2 < active < 0.95))),
     }
 

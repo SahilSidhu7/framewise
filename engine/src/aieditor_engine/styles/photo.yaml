@@ -1,0 +1,34 @@
+# Editing styles for photos. looks: allowed looks, best first ([] = corrections only).
+natural:
+  title: Natural
+  description: Just fix exposure, colour and tilt.
+  looks: []
+portrait:
+  title: Portrait
+  description: Flattering skin and soft contrast.
+  looks: [film_portra, aesthetic_soft]
+food:
+  title: Food
+  description: Fresh, bright and appetising.
+  looks: [vivid_pop, bright_airy]
+product:
+  title: Product
+  description: Clean and bright with true colours.
+  looks: [bright_airy]
+moody:
+  title: Moody
+  description: Dark, cool and atmospheric.
+  looks: [moody_dark, noir]
+  words: moody dark
+vintage:
+  title: Vintage
+  description: Old film colours and grain.
+  looks: [vintage_70s, polaroid, faded_film]
+black_white:
+  title: Black & white
+  description: Classic monochrome.
+  looks: [bw_classic, noir]
+cinematic:
+  title: Cinematic
+  description: Movie-style colour.
+  looks: [teal_orange_cinematic, film_portra]

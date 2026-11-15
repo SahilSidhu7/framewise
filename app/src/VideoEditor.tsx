@@ -1,17 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import {
-  clipDuration,
-  EngineClient,
-  isTauri,
-  projectDuration,
-  type Caption,
-  type Clip,
-  type EngineEvent,
-  type LookInfo,
-  type Snapshot,
-  type Track,
-  type VideoVariation,
-} from "./engine";
+import { clipDuration, EngineClient, isTauri, projectDuration, type Caption, type Clip, type EngineEvent, type LookInfo, type Snapshot, type Track, type VideoVariation, type AiOptions, type OutputOptions } from "./engine";
 
 type Tab = "ai" | "clip" | "look" | "text" | "export";
 type RunFn = (name: string, params: Record<string, unknown>) => Promise<Record<string, unknown> | undefined>;
@@ -558,11 +546,67 @@ function VideoAi({ client, snapshot, onNotice }: { client: EngineClient; snapsho
   const [applied, setApplied] = useState<number | null>(null);
   const [heading, setHeading] = useState("");
   const [status, setStatus] = useState<string>("");
+  const [options, setOptions] = useState<AiOptions | null>(null);
+  const [style, setStyle] = useState<string>("auto");
+  const [platform, setPlatform] = useState<string>("auto");
+  const [length, setLength] = useState<number | null>(null);
+  const [captions, setCaptions] = useState<boolean | null>(null);
   const hasMedia = Object.keys(snapshot.project.media).length > 0;
+  const hasVideo = Object.values(snapshot.project.media).some((m) => m.kind === "video");
 
   useEffect(() => {
     client.aiWarmup().then((s) => setStatus(s.state === "not_installed" ? "Basic AI (model not installed)" : "Local AI model"), () => undefined);
+    client.aiOptions().then(setOptions, () => undefined);
   }, [client]);
+
+  const output = (): OutputOptions | null => {
+    const o: OutputOptions = {};
+    if (platform !== "auto") o.platform = platform;
+    if (length) o.length = length;
+    if (captions !== null) o.captions = captions;
+    return Object.keys(o).length ? o : null;
+  };
+  const chosenStyle = style === "auto" ? null : style;
+
+  const reels = async () => {
+    setBusy(true);
+    setVars([]);
+    setApplied(null);
+    setHeading("Best moments as reels");
+    try {
+      const res = await client.aiReels({ count: 3, style: chosenStyle, output: output() ?? { platform: "instagram_reel" }, captions });
+      const list: VideoVariation[] = res.variations.map((v) => ({
+        program: v.program,
+        rationale: `${v.title} · ${v.info.duration.toFixed(0)} s${v.info.silence_removed > 0.3 ? `, ${v.info.silence_removed.toFixed(1)} s of pauses cut` : ""}${v.info.reframed ? ", follows the speaker" : ""} · ${v.rationale}`,
+        source: "highlights",
+        intent: "",
+        warnings: [],
+      }));
+      setVars(list);
+      if (list.length) await apply(0, list);
+    } catch (e) {
+      onNotice(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const likeThis = async () => {
+    const ids = Object.keys(snapshot.project.media);
+    const raw = window.prompt(`Which video should the style copy? Its number in the media bin (1-${ids.length}):`, "1");
+    const n = raw ? parseInt(raw, 10) : NaN;
+    if (!n || n < 1 || n > ids.length) return;
+    const name = window.prompt("Name for this style:", "My style");
+    if (!name) return;
+    try {
+      const st = await client.styleFromVideo(n, name);
+      setOptions(await client.aiOptions());
+      setStyle(st.id);
+      onNotice(`Saved style "${st.title}": ${st.description}`);
+    } catch (e) {
+      onNotice(e instanceof Error ? e.message : String(e));
+    }
+  };
 
   const apply = async (i: number, list = vars) => {
     try {
@@ -580,7 +624,7 @@ function VideoAi({ client, snapshot, onNotice }: { client: EngineClient; snapsho
     setApplied(null);
     setHeading(text);
     try {
-      const res = await client.aiVideo(text);
+      const res = await client.aiVideo(text, chosenStyle, output());
       if (res.error) throw new Error(res.error);
       setVars(res.variations);
       if (res.variations.length) await apply(0, res.variations);
@@ -610,7 +654,57 @@ function VideoAi({ client, snapshot, onNotice }: { client: EngineClient; snapsho
         }}
         disabled={!hasMedia}
       />
+      {options && (
+        <div className="ai-options">
+          <label>
+            <span className="small muted">Style</span>
+            <select value={style} onChange={(e) => (e.target.value === "__like" ? likeThis() : setStyle(e.target.value))} disabled={busy}>
+              <option value="auto">Auto</option>
+              {options.video.styles.map((s) => (
+                <option key={s.id} value={s.id} title={s.description}>
+                  {s.custom ? "★ " : ""}
+                  {s.title}
+                </option>
+              ))}
+              <option value="__like">Edit like a video…</option>
+            </select>
+          </label>
+          <label>
+            <span className="small muted">For</span>
+            <select value={platform} onChange={(e) => setPlatform(e.target.value)} disabled={busy}>
+              <option value="auto">Auto</option>
+              {options.video.outputs.map((o) => (
+                <option key={o.id} value={o.id}>
+                  {o.title}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            <span className="small muted">Length</span>
+            <select value={length ?? ""} onChange={(e) => setLength(e.target.value ? Number(e.target.value) : null)} disabled={busy}>
+              <option value="">Auto</option>
+              {options.lengths.map((l) => (
+                <option key={l} value={l}>
+                  {l} s
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            <span className="small muted">Captions</span>
+            <select value={captions === null ? "" : captions ? "on" : "off"} onChange={(e) => setCaptions(e.target.value ? e.target.value === "on" : null)} disabled={busy}>
+              <option value="">Auto</option>
+              <option value="on">On</option>
+              <option value="off">Off</option>
+            </select>
+          </label>
+        </div>
+      )}
       <div className="row end">
+        <button disabled={busy || !hasVideo} onClick={reels} title="Find the best moments of your longest video and turn each into a short vertical clip">
+          Make reels
+        </button>
         <button className="primary" disabled={busy || !hasMedia || !prompt.trim()} onClick={() => go(prompt)}>
           {busy ? "Editing…" : "Edit my video"}
         </button>

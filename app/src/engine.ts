@@ -60,10 +60,42 @@ export interface Job {
   error: string | null;
 }
 
+export interface StyleOption {
+  id: string;
+  title: string;
+  description: string;
+  custom?: boolean;
+}
+export interface OutputChoice {
+  id: string;
+  title: string;
+  aspect?: string;
+}
+export interface AiOptions {
+  video: { styles: StyleOption[]; outputs: OutputChoice[] };
+  photo: { styles: StyleOption[]; outputs: OutputChoice[] };
+  lengths: number[];
+}
+export interface OutputOptions {
+  platform?: string | null;
+  length?: number | null;
+  versions?: number | null;
+  captions?: boolean | null;
+  music?: boolean | null;
+}
+export interface ReelVariation {
+  program: string;
+  title: string;
+  rationale: string;
+  score: number;
+  moment: { start: number; end: number; text: string };
+  info: { pieces: number; duration: number; silence_removed: number; reframed: boolean };
+}
+
 export interface VideoVariation {
   program: string;
   rationale: string;
-  source: "llm" | "rules";
+  source: "llm" | "rules" | "highlights";
   intent: string;
   warnings: string[];
 }
@@ -116,7 +148,7 @@ export interface LookInfo {
 export interface AiVariation {
   program: string;
   rationale: string;
-  source: "llm" | "rules";
+  source: "llm" | "rules" | "highlights";
   warnings: string[];
 }
 
@@ -257,12 +289,15 @@ export class EngineClient {
 
   aiStatus = () => this.request<AiStatus>("GET", "/ai/status");
   aiWarmup = () => this.request<AiStatus>("POST", "/ai/warmup");
-  aiEdit = (mediaId: string, prompt: string) =>
+  aiEdit = (mediaId: string, prompt: string, style?: string | null, output?: OutputOptions | null) =>
     this.request<{ variations: AiVariation[]; brief: string; llm_error: string | null }>("POST", "/ai/edit", {
       media_id: mediaId,
       prompt,
       variations: 3,
+      style: style || null,
+      output: output || null,
     });
+  aiOptions = () => this.request<AiOptions>("GET", "/ai/options");
   exportImage = (mediaId: string, opts: ExportOptions) =>
     this.request<{ path: string; width: number; height: number }>("POST", `/media/${mediaId}/export`, opts);
 
@@ -284,11 +319,21 @@ export class EngineClient {
   speechStatus = () => this.request<{ available: boolean; model: string | null }>("GET", "/ai/speech/status");
   autoCaptions = (style: string) => this.request<{ job: string }>("POST", "/timeline/auto_captions", { style });
   timelineDsl = () => this.request<{ program: string; duration: number }>("GET", "/timeline/dsl");
-  aiVideo = (prompt: string) =>
+  aiVideo = (prompt: string, style?: string | null, output?: OutputOptions | null) =>
     this.request<{ variations: VideoVariation[]; brief: string; llm_error: string | null; error?: string }>("POST", "/ai/video", {
       prompt,
       variations: 3,
+      style: style || null,
+      output: output || null,
     });
+  aiReels = (body: { count?: number; style?: string | null; output?: OutputOptions | null; captions?: boolean | null }) =>
+    this.request<{ variations: ReelVariation[]; aspect: string; style: string; export: string | null; tracking: string | null }>(
+      "POST",
+      "/ai/reels",
+      body,
+    );
+  styleFromVideo = (mediaNumber: number, name: string) =>
+    this.request<StyleOption & { pace: string }>("POST", "/ai/styles/from_video", { media_number: mediaNumber, name });
   aiVideoApply = (program: string, mode: "replace" | "append" = "replace") =>
     this.request<{ result: Record<string, unknown>; revision: number }>("POST", "/ai/video/apply", { program, mode });
 

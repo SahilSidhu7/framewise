@@ -13,6 +13,8 @@ from fastapi import FastAPI, HTTPException, Query, Response
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 
+from ..agent.options import OptionError, OutputOptions, catalog, save_style, style_from_reference
+from ..agent.reels import make_reels
 from ..agent.video_planner import plan_video
 from ..agent.whisper import WhisperUnavailable, whisper_status
 from ..core.commands import CommandError
@@ -51,7 +53,24 @@ class VideoExportBody(BaseModel):
 
 class AiVideoBody(BaseModel):
     prompt: str = Field(min_length=1, max_length=500)
-    variations: int = Field(3, ge=1, le=4)
+    variations: int = Field(3, ge=1, le=5)
+    style: str | None = Field(None, description="Editing style id from /ai/options, or auto")
+    output: OutputOptions | None = None
+
+
+class ReelsBody(BaseModel):
+    media_number: int | None = Field(None, ge=1, description="Which video in the bin (default: the longest one with speech)")
+    count: int = Field(3, ge=1, le=10)
+    length: float | None = Field(None, ge=5, le=180)
+    style: str | None = None
+    output: OutputOptions | None = None
+    captions: bool | None = None
+    tighten: bool = Field(True, description="Cut silences and filler words")
+
+
+class StyleFromVideoBody(BaseModel):
+    media_number: int = Field(ge=1, description="The reference video in the bin")
+    name: str = Field("My style", min_length=1, max_length=40)
 
 
 class AiApplyBody(BaseModel):
@@ -255,7 +274,42 @@ def register(app: FastAPI, require, secured: list) -> None:  # noqa: ANN001 - Fa
         """Plan whole-video edits. Returns variations (Video DSL); nothing is applied."""
         session: Session = require()
         ctx = session.video_context(transcribe_speech=True)  # cached; also lets the director cut on sentences
-        return plan_video(body.prompt, ctx, body.variations)
+        try:
+            return plan_video(body.prompt, ctx, body.variations, style=body.style, output=body.output, styles_dir=session.styles_dir)
+        except OptionError as exc:
+            raise HTTPException(422, str(exc)) from exc
+
+    @app.get("/ai/options", dependencies=secured)
+    def ai_options() -> dict[str, Any]:
+        """Editing styles and desired outputs for the chips next to the prompt box."""
+        session = require()
+        return catalog(session.styles_dir)
+
+    @app.post("/ai/reels", dependencies=secured)
+    def ai_reels(body: ReelsBody) -> dict[str, Any]:
+        """Find the best moments of one long video and return a ready reel program for each (nothing applied)."""
+        session: Session = require()
+        ctx = session.video_context(transcribe_speech=True)
+        try:
+            return make_reels(ctx, media_number=body.media_number, count=body.count, length=body.length, style=body.style,
+                              output=body.output, captions=body.captions, tighten=body.tighten,
+                              subject_of=session.subject_track, styles_dir=session.styles_dir)
+        except (OptionError, ValueError) as exc:
+            raise HTTPException(422, str(exc)) from exc
+
+    @app.post("/ai/styles/from_video", dependencies=secured)
+    def ai_style_from_video(body: StyleFromVideoBody) -> dict[str, Any]:
+        """"Edit like this": measure a reference video and save it as a reusable style."""
+        session: Session = require()
+        ids = list(session.bus.project.media)
+        if body.media_number > len(ids):
+            raise HTTPException(404, "no such media")
+        mid = ids[body.media_number - 1]
+        if session.bus.project.media[mid].kind != MediaKind.VIDEO:
+            raise HTTPException(422, "pick a video as the reference")
+        style = style_from_reference(session.video_analysis(mid), body.name)
+        key = save_style(session.styles_dir, body.name, style)
+        return {"id": key, **style}
 
     @app.post("/ai/video/apply", dependencies=secured)
     def ai_video_apply(body: AiApplyBody) -> dict[str, Any]:

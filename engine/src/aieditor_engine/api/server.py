@@ -32,6 +32,7 @@ from pydantic import BaseModel, Field
 
 from .. import __version__
 from ..agent.llm import LLM, LLMUnavailable
+from ..agent.options import OptionError, OutputOptions
 from ..agent.planner import plan
 from ..core.commands import CommandError, list_commands
 from ..core.project import ProjectKind
@@ -86,7 +87,9 @@ class PreviewBody(BaseModel):
 class AiEditBody(BaseModel):
     media_id: str
     prompt: str = Field(min_length=1, max_length=500)
-    variations: int = Field(3, ge=1, le=4)
+    variations: int = Field(3, ge=1, le=5)
+    style: str | None = Field(None, description="Photo style id from /ai/options, or auto")
+    output: OutputOptions | None = None
 
 
 def _safe_start() -> None:
@@ -325,7 +328,10 @@ def create_app(token: str | None = None) -> FastAPI:
         the client runs photo.apply_program with source='ai'."""
         session = state.require()
         _, stack = session.photo_stack(body.media_id)
-        return plan(body.prompt, session.analysis(body.media_id), to_dsl(stack), body.variations)
+        try:
+            return plan(body.prompt, session.analysis(body.media_id), to_dsl(stack), body.variations, body.style, body.output)
+        except OptionError as exc:
+            raise HTTPException(422, str(exc)) from exc
 
     video_routes.register(app, state.require, secured)
 

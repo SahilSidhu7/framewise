@@ -13,11 +13,13 @@ from __future__ import annotations
 
 import logging
 import re
+from collections.abc import Callable
 from dataclasses import dataclass, field, replace
 from typing import Any
 
 from ..imaging.recipes import load_recipes
 from ..video.analysis import best_window
+from ..video.reframe import reframe_keys, x_param
 from ..video.vdsl import ASPECTS, CAPTION_STYLES, TRANSITIONS
 from .llm import LLM, LLMUnavailable
 from .planner import INTENSITY, _match_looks, wants
@@ -67,6 +69,8 @@ class MediaInfo:
 class VideoContext:
     media: list[MediaInfo]
     current_program: str = ""
+    # media_id -> subject track (video/reframe.py); looked up only when a wide clip goes on a taller canvas
+    subject_of: Callable[[str], dict[str, Any] | None] | None = None
 
     @property
     def visual(self) -> list[MediaInfo]:
@@ -150,6 +154,8 @@ class VideoHints:
     slowmo: bool
     strength: float
     text: str
+    style_captions: str | None = None  # the chosen style's caption look, used when captions get switched on
+    fixed_pace: str | None = None  # set when a style was chosen: the model may not change the pace
 
 
 def _default_aspect(ctx: VideoContext) -> str:
@@ -403,6 +409,20 @@ def direct(intent: Intent, ctx: VideoContext) -> str:
         seq.pop()
 
     lines = [f"# {intent.rationale}" if intent.rationale else "# edit", f"aspect {intent.aspect}"]
+    aw, ah = ASPECTS[intent.aspect]
+    tracks: dict[str, dict[str, Any] | None] = {}
+
+    def follow(s: Shot) -> str:
+        """Keep the subject in frame when a wide clip is cropped to a taller canvas."""
+        if s.media.kind != "video" or s.media.orientation != "landscape" or aw / ah >= 1.5 or ctx.subject_of is None:
+            return ""
+        if s.media.media_id not in tracks:
+            tracks[s.media.media_id] = ctx.subject_of(s.media.media_id)
+        keys = reframe_keys(tracks[s.media.media_id], s.a, s.b, aw / ah, s.speed)
+        if s.duration < 3.0 and len(keys) > 1:
+            keys = [(0.0, round(sum(v for _, v in keys) / len(keys), 4))]
+        return x_param(keys).strip()
+
     trans = intent.transition
     tdur = {"fast": 0.25, "medium": 0.5, "slow": 0.8}.get(intent.pace, 0.5)
     for i, s in enumerate(seq):
@@ -419,6 +439,9 @@ def direct(intent: Intent, ctx: VideoContext) -> str:
             parts.append(f"transition={trans}:{min(tdur, s.duration / 2):.2f}")
         if intent.music and not s.speech and s.media.kind == "video":
             parts.append("volume=0.25")
+        framing = follow(s)
+        if framing:
+            parts.append(framing)
         lines.append(" ".join(parts))
     if intent.music:
         lines.append(f"music {intent.music} volume=0.8 fade={1.5 if intent.pace != 'fast' else 0.8}")
@@ -467,6 +490,7 @@ def _intent_grammar(h: VideoHints, ctx: VideoContext) -> str:
 
     looks = h.looks or SAFE_VIDEO_LOOKS  # vague request: crowd-pleasers only
     aspects = (h.aspect,) if h.aspect else tuple(ASPECTS)[:4]
+    paces = (h.fixed_pace,) if h.fixed_pace else tuple(PACE_SHOT)
     songs = [h.music] if h.music else []  # the rules decide whether music fits
     speech = any(m.speech for m in ctx.visual)
     lines = [
@@ -475,7 +499,7 @@ def _intent_grammar(h: VideoHints, ctx: VideoContext) -> str:
         'rationale ::= "# " [^\\n]{3,120}',
         'nl ::= "\\n"',
         "aspect ::= \"aspect \" (" + " | ".join(lit(a) for a in aspects) + ")",
-        'pace ::= "pace " ("fast" | "medium" | "slow")',
+        "pace ::= \"pace \" (" + " | ".join(lit(x) for x in paces) + ")",
         "trans ::= \"transition \" (" + " | ".join(lit(t) for t in ("none",) + TRANSITIONS[:4]) + ")",
         "look ::= \"look \" (" + " | ".join(lit(n) for n in looks) + ') " s=" ("0." [4-9] | "1" ("." [0-2])?)',
         'fin ::= ("grain 0." [0-3] [0-9] | "vignette 0." [1-4] | "bloom 0." [1-3])',
@@ -555,8 +579,17 @@ def _llm_intents(h: VideoHints, ctx: VideoContext, prompt: str, n: int) -> list[
     return out
 
 
-def plan_video(prompt: str, ctx: VideoContext, variations: int = 3, use_llm: bool = True) -> dict[str, Any]:
-    h = video_hints(prompt, ctx)
+def plan_video(
+    prompt: str, ctx: VideoContext, variations: int = 3, use_llm: bool = True,
+    style: str | None = None, output: Any = None, styles_dir: Any = None,
+) -> dict[str, Any]:
+    """style / output are the optional prompt options (agent/options.py): explicit
+    choices are hard constraints, the prompt fills whatever is left on Auto."""
+    from .options import apply_video_options
+
+    h = apply_video_options(video_hints(prompt, ctx), ctx, style, output, styles_dir)
+    if output is not None and getattr(output, "versions", None):
+        variations = output.versions
     intents: list[tuple[Intent, str]] = []
     llm_error = None
     if use_llm and LLM.available():
@@ -565,8 +598,8 @@ def plan_video(prompt: str, ctx: VideoContext, variations: int = 3, use_llm: boo
         except LLMUnavailable as exc:
             llm_error = str(exc)
     # rule variations: matched look / second look / other pace
-    alt_pace = {"fast": "medium", "medium": "fast" if h.music else "slow", "slow": "medium"}[h.pace]
-    rules = [intent_from_hints(h, ctx), intent_from_hints(h, ctx, 1), intent_from_hints(h, ctx, 0, alt_pace)]
+    alt_pace = h.fixed_pace or {"fast": "medium", "medium": "fast" if h.music else "slow", "slow": "medium"}[h.pace]
+    rules = [intent_from_hints(h, ctx), intent_from_hints(h, ctx, 1), intent_from_hints(h, ctx, 0, alt_pace), intent_from_hints(h, ctx, 2)]
     if not h.looks:
         safe = ("vivid_pop", "film_portra", "golden_hour") if h.pace != "slow" else ("film_portra", "teal_orange_cinematic", "faded_film")
         rules = [replace(rules[0])] + [replace(rules[0], look=s, strength=0.7, rationale=rules[0].rationale + f", {load_recipes()[s].title} look") for s in safe]
