@@ -34,6 +34,7 @@ from .. import __version__
 from ..agent.llm import LLM, LLMUnavailable
 from ..agent.options import OptionError, OutputOptions
 from ..agent.planner import plan
+from ..automation.jobs import JobManager
 from ..core.commands import CommandError, list_commands
 from ..core.project import ProjectKind
 from ..dsl import DslError, compile_program, to_dsl
@@ -133,7 +134,8 @@ class EngineState:
             listener(event)
 
 
-def create_app(token: str | None = None) -> FastAPI:
+def create_app(token: str | None = None, automation: JobManager | None = None) -> FastAPI:
+    """automation: when given, the public /v1 job API is mounted (headless `aieditor serve`)."""
     token = token or secrets.token_urlsafe(32)
     state = EngineState()
 
@@ -142,6 +144,8 @@ def create_app(token: str | None = None) -> FastAPI:
         yield
         if state.session is not None:
             state.session.close(wait=False)
+        if automation is not None:
+            automation.shutdown()
 
     app = FastAPI(title="AIEditor Engine", version=__version__, lifespan=lifespan)
     app.state.token = token
@@ -334,6 +338,11 @@ def create_app(token: str | None = None) -> FastAPI:
             raise HTTPException(422, str(exc)) from exc
 
     video_routes.register(app, state.require, secured)
+    if automation is not None:
+        from . import public_routes
+
+        app.state.automation = automation
+        public_routes.register(app, automation, token)
 
     # -------------------------------------------------------------- events
     @app.websocket("/ws")

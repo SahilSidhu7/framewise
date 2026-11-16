@@ -85,6 +85,17 @@ cd engine && uv run --group build python scripts/build_sidecar.py
 cd ../app && npx tauri build --config src-tauri/tauri.bundle.conf.json
 ```
 
+## Automation (n8n, scripts, AI agents)
+```bash
+aieditor serve                                   # headless API on 127.0.0.1:8765, docs at /docs
+aieditor reel talk.mp4 --platform tiktok --set count=3 --out shorts/
+aieditor watch ~/Videos/inbox --recipe captions  # drop files in, get results out
+aieditor mcp                                     # MCP server for AI agents
+```
+Public job API under `/v1` (API keys, uploads, jobs, long-poll, signed webhooks), recipes `reel`, `highlights`,
+`captions`, `video_edit`, `photo_edit`, `render_program`, `transcribe`. See [integrations/README.md](integrations/README.md)
+for the HTTP API, webhooks, the n8n node and template, watch folders and MCP.
+
 ## Engine API (localhost only, token required)
 | Method | Path | Purpose |
 |---|---|---|

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 import threading
@@ -27,7 +28,13 @@ ANALYSIS_VERSION = 3
 
 
 class Session:
-    def __init__(self, root: Path, project: Project, *, proxy_workers: int = 1) -> None:
+    def __init__(self, root: Path, project: Project, *, proxy_workers: int = 1, make_proxies: bool = True,
+                 shared_cache: Path | None = None) -> None:
+        """make_proxies=False skips preview proxies (headless jobs render from originals).
+        shared_cache keeps analyses/transcripts in one folder keyed by file, so many
+        short-lived projects (automation jobs) never analyse the same file twice."""
+        self.make_proxies = make_proxies
+        self.shared_cache = shared_cache
         self.paths = ProjectPaths(root)
         self.paths.ensure()
         self.bus = CommandBus(project, log_path=self.paths.trajectory_log)
@@ -42,8 +49,8 @@ class Session:
 
     # ----------------------------------------------------------- lifecycle
     @classmethod
-    def create(cls, root: Path, name: str, kind: ProjectKind = ProjectKind.VIDEO) -> Session:
-        return cls(root, create_project(root, name, kind))
+    def create(cls, root: Path, name: str, kind: ProjectKind = ProjectKind.VIDEO, **kw: Any) -> Session:
+        return cls(root, create_project(root, name, kind), **kw)
 
     @classmethod
     def open(cls, root: Path) -> Session:
@@ -84,7 +91,7 @@ class Session:
             media_id = result["media_id"]
             imported.append(media_id)
             self._make_thumb(media_id)
-            if info["kind"] == MediaKind.VIDEO:
+            if info["kind"] == MediaKind.VIDEO and self.make_proxies:
                 self._queue_proxy(media_id)
         return {"imported": imported, "failed": failed}
 
@@ -107,6 +114,15 @@ class Session:
 
     # --------------------------------------------------------------- video
     def _cache_json(self, kind: str, media_id: str) -> Path:
+        if self.shared_cache is not None:
+            item = self.bus.project.media.get(media_id)
+            if item is not None:
+                src = Path(item.path)
+                size = src.stat().st_size if src.exists() else 0
+                key = hashlib.sha1(f"{src.resolve()}|{size}".encode()).hexdigest()[:20]
+                d = self.shared_cache / kind
+                d.mkdir(parents=True, exist_ok=True)
+                return d / f"{key}.json"
         d = self.paths.root / "cache" / kind
         d.mkdir(parents=True, exist_ok=True)
         return d / f"{media_id}.json"

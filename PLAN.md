@@ -374,6 +374,9 @@ AIEditor/
 | M0 | Foundations: command bus, project model, FastAPI, Tauri shell, media import + proxies, CI | done |
 | M1 + AI v0 | Photo engine, looks, Edit DSL, local EditLM (off-the-shelf model), photo editor UI | done |
 | Video v1 | Timeline compositor, transitions, audio mix, captions (whisper), AI director, export, video editor UI | done |
+| A1 | Layered compositor: transforms, opacity, blend modes, crop, keyframes, track mute/hide/lock, markers, schema v2 | done |
+| C + C+ | Highlights, auto-reframe, pause/filler cutting, reels; style + output options next to every prompt; "edit like this" | done |
+| D | Automation: `aieditor serve` headless API (/v1 jobs, uploads, long-poll, results), hashed scoped API keys, HMAC webhooks with retries, 7 recipes, CLI, watch folders, MCP server, n8n community node + HTTP-only template | done (n8n node not yet built/installed in a real n8n) |
 
 ### 12.2 Gap analysis: what the product goal still needs
 Goal: usable by a 10-year-old with professional-looking results, automatic highlights and reels, drivable by n8n and similar tools, a layered movie timeline, then superpower VFX.
@@ -443,8 +446,9 @@ A do-everything editor cannot beat CapCut, Adobe or free DaVinci Resolve head-on
 
 ---
 
-## 15. Next steps (A1)
-1. Schema v-next: layer fields on `Clip`, migration for existing projects.
-2. Alpha / blend / transform compositing in `video/compose.py`, keyframe evaluation.
-3. DSL statements and commands for layers; tests against hand-computed pixels.
-4. Then phase C (highlights, reframe, reels) with the prompt options.
+## 15. Next steps (R1: first public release)
+1. Pro licence check (offline Ed25519 key) gating `aieditor serve`, watch folders and batch, per BUSINESS.md.
+2. Build and test the n8n community node against a real n8n; publish it and the workflow templates.
+3. Signed Windows installer that ships the engine, `aieditor` CLI, whisper and the first-run model downloader.
+4. Onboarding + hardware benchmark; opt-in crash reports.
+5. Leftovers from C: word-by-word animated captions, progress bar and end card; caption placement that avoids faces and burned-in titles.
