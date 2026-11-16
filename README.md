@@ -84,6 +84,12 @@ In debug builds the shell starts `engine/.venv`'s Python automatically. To use a
 cd engine && uv run --group build python scripts/build_sidecar.py
 cd ../app && npx tauri build --config src-tauri/tauri.bundle.conf.json
 ```
+Output: `app/src-tauri/target/release/bundle/nsis/AIEditor_<version>_x64-setup.exe` (about 105 MB, per-user install,
+no admin rights). The engine is one frozen binary (`aieditor-engine.exe`, starts in about 3 s) that the app launches;
+called with a command (`aieditor-engine.exe reel ...` or `... cli ...`) it is the `aieditor` command line, and the
+installer drops an `aieditor.cmd` launcher into `%LOCALAPPDATA%\Microsoft\WindowsApps` (already on PATH) so
+`aieditor` works in any terminal. Uninstalling removes the program files and that launcher, never the user's
+models, licence or jobs. The installer is not code-signed yet, so Windows SmartScreen will warn.
 
 ## Automation (n8n, scripts, AI agents)
 ```bash

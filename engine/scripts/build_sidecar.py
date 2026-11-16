@@ -41,6 +41,8 @@ def main() -> None:
             "--collect-submodules", "aieditor_engine",
             "--collect-data", "aieditor_engine",  # looks (recipes/*.yaml)
             "--collect-all", "av",
+            "--collect-submodules", "uvicorn",
+            "--exclude-module", "tkinter", "--exclude-module", "matplotlib", "--exclude-module", "pytest",
             str(ENGINE / "scripts" / "sidecar_entry.py"),
         ],
         cwd=WORK,
