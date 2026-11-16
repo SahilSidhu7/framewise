@@ -81,7 +81,11 @@ def register(app: FastAPI, manager: JobManager, engine_token: str | None) -> Non
     @app.get("/v1/me", tags=tags)
     def me(c: Caller = Depends(caller)) -> dict[str, Any]:
         """Who am I (used by the n8n credential test)."""
-        return {"key_id": c.key_id, "name": c.name, "scopes": list(c.scopes)}
+        out: dict[str, Any] = {"key_id": c.key_id, "name": c.name, "scopes": list(c.scopes)}
+        if manager.licence is not None:
+            st = manager.licence.status()
+            out["tier"], out["trial_days_left"] = st["tier"], st["trial_days_left"]
+        return out
 
     @app.get("/v1/recipes", tags=tags)
     def recipes(_: Caller = jobs_scope) -> list[dict[str, Any]]:

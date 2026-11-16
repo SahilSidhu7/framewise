@@ -96,6 +96,13 @@ Public job API under `/v1` (API keys, uploads, jobs, long-poll, signed webhooks)
 `captions`, `video_edit`, `photo_edit`, `render_program`, `transcribe`. See [integrations/README.md](integrations/README.md)
 for the HTTP API, webhooks, the n8n node and template, watch folders and MCP.
 
+**Free vs Pro.** The desktop editor is free. One-shot `aieditor` commands and MCP are free with limits (one reel per
+video, one photo per job, no webhooks). Pro unlocks `aieditor serve`, watch folders, batches, webhooks and up to 10
+reels per video. `aieditor licence trial` starts a 14-day trial once; `aieditor licence activate KEY` adds a key
+(or set `AIEDITOR_LICENSE` on servers and in containers). Keys are Ed25519-signed and checked offline; the app also
+exposes `GET/POST/DELETE /licence`. Keys are made with `tools/licence_issuer.py` and a private key that stays
+outside this repository.
+
 ## Engine API (localhost only, token required)
 | Method | Path | Purpose |
 |---|---|---|

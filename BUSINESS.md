@@ -17,7 +17,7 @@ Rule: **no server of ours runs AI unless a customer has already paid for that ex
 | Tier | What | Price idea | Our cost |
 |---|---|---|---|
 | Free | Full local editor: photo + video, AI prompts with style/output options, captions, export with no watermark | 0 | 0 (runs on their PC) |
-| Pro licence | Automation: headless mode, public API, webhooks, CLI, watch folders, batch, n8n node unlock, several reels per video, premium style packs | one-time about $59, or $8/month | 0 (offline-signed licence key, checked locally) |
+| Pro licence | Automation: headless mode, public API, webhooks, watch folders, batch, n8n node unlock, several reels per video, premium style packs. Free keeps one-shot CLI/MCP with limits (1 reel per video, 1 photo per job, no webhooks) as the taster; 14-day trial once per computer | one-time about $59, or $8/month | 0 (offline-signed licence key, checked locally; built: `aieditor licence`, `tools/licence_issuer.py`) |
 | Studio / agency | Commercial multi-seat, priority support | about $199/year per seat | 0 |
 | Packs | VFX packs, style packs, music/SFX packs; later a marketplace with revenue share | $5–15 each | 0 (file download) |
 | Connect | Reach your own PC's engine from a phone or from cloud n8n/Zapier through a secure tunnel. The PC does all the AI work | about $4/month | near 0 (Cloudflare Tunnel / Workers free tier; the relay carries small control messages only) |

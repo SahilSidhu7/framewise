@@ -6,6 +6,9 @@ Everything runs on your own computer. Start the engine without the desktop app:
 aieditor serve                 # http://127.0.0.1:8765, interactive docs at /docs
 ```
 
+`serve`, watch folders, batches, webhooks and several reels per video need Pro: `aieditor licence trial` (14 days,
+once) or `aieditor licence activate KEY`. One-shot commands and MCP work without it, with limits.
+
 The first start creates an API key and prints it once. Make more with
 `aieditor keys create NAME [--scope jobs] [--scope local] [--scope admin]`.
 
