@@ -66,6 +66,8 @@ class ReelsBody(BaseModel):
     output: OutputOptions | None = None
     captions: bool | None = None
     tighten: bool = Field(True, description="Cut silences and filler words")
+    progress_bar: bool = Field(True, description="Thin progress bar at the top")
+    end_card: str | None = Field(None, max_length=120, description="Closing card text")
 
 
 class StyleFromVideoBody(BaseModel):
@@ -293,7 +295,8 @@ def register(app: FastAPI, require, secured: list) -> None:  # noqa: ANN001 - Fa
         try:
             return make_reels(ctx, media_number=body.media_number, count=body.count, length=body.length, style=body.style,
                               output=body.output, captions=body.captions, tighten=body.tighten,
-                              subject_of=session.subject_track, styles_dir=session.styles_dir)
+                              subject_of=session.subject_track, styles_dir=session.styles_dir,
+                              progress_bar=body.progress_bar, end_card=body.end_card or None)
         except (OptionError, ValueError) as exc:
             raise HTTPException(422, str(exc)) from exc
 

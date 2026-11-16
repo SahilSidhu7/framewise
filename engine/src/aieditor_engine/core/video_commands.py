@@ -269,10 +269,15 @@ def caption_set(p: Project, a: CaptionSetParams) -> None:
     cap = next((c for c in p.captions if c.id == a.caption_id), None)
     if cap is None:
         raise CommandError(f"caption not found: {a.caption_id}")
-    for key in ("start", "end", "text", "style", "position"):
+    for key in ("start", "end", "text", "style"):
         value = getattr(a, key)
         if value is not None:
             setattr(cap, key, value)
+    if "position" in a.model_fields_set:  # null = back to auto (the style's place, moved off faces on export)
+        cap.position = a.position
+        cap.auto_position = False
+    if a.text is not None and cap.words and len(cap.words) != len(a.text.split()):
+        cap.words = None  # word timings no longer match the edited text
     if cap.end <= cap.start:
         raise CommandError("end must be after start")
     p.captions.sort(key=lambda c: c.start)

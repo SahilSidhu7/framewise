@@ -22,7 +22,7 @@ The first start creates an API key and prints it once. Make more with
 
 | Recipe | In | Out |
 |---|---|---|
-| `reel` | one long video (+ optional music) | `reel_N.mp4` vertical clips, best moments first, pauses cut, speaker kept in frame, captions; `reels.json` |
+| `reel` | one long video (+ optional music) | `reel_N.mp4` vertical clips, best moments first, pauses cut, speaker kept in frame, word-highlighted captions kept off faces and on-screen titles, progress bar (`progress_bar`), optional closing card (`end_card: "Follow for part 2"`); `reels.json` |
 | `highlights` | a video | `highlights.json` (start, end, title, reason, score), optionally `highlight_N.mp4` |
 | `captions` | a video | `<name>_captioned.mp4` and `<name>.srt` |
 | `video_edit` | videos, photos, music + `prompt` | `edit_N.mp4`, `edits.json` |

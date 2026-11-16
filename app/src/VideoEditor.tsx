@@ -1015,9 +1015,11 @@ function CaptionRow({ c, styles, active, run, onSelect }: { c: Caption; styles: 
             ))}
           </select>
           <select value={c.position ?? ""} onChange={(e) => run("caption.set", { caption_id: c.id, position: e.target.value || null })}>
-            <option value="">Default place</option>
+            <option value="">Auto (avoid faces)</option>
             <option value="top">Top</option>
+            <option value="high">High</option>
             <option value="center">Center</option>
+            <option value="center_low">Below center</option>
             <option value="lower_third">Lower third</option>
             <option value="bottom">Bottom</option>
           </select>

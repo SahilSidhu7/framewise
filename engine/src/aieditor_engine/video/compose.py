@@ -303,6 +303,9 @@ def render_frame(
     """Finished uint8 RGB frame at time t."""
     fps = project.settings.fps or 30
     seed = int(t * fps)  # grain/dust change every frame
+    content_end = project.content_end
+    if project.settings.end_card and t >= content_end > 0:
+        return _end_card(project, t, w, h, src, content_end)
     canvas: np.ndarray | None = None
     for track in project.tracks:  # bottom to top
         if track.kind == "audio" or track.hidden:
@@ -335,8 +338,53 @@ def render_frame(
     if captions:
         for cap in project.captions:
             if cap.start <= t < cap.end:
+                if not frame.flags.writeable:
+                    frame = frame.copy()
                 draw_text(frame, cap.text, cap.style, cap.position, t - cap.start, cap.end - t,
-                          bar if cap.kind == "caption" else 0)
+                          bar if cap.kind == "caption" else 0, cap.words)
+    if s.progress_bar != "off" and content_end > 0:
+        if not frame.flags.writeable:
+            frame = frame.copy()
+        _progress_bar(frame, min(1.0, t / content_end), s.progress_bar, bar)
+    return frame
+
+
+def _progress_bar(frame: np.ndarray, p: float, where: str, bar: int) -> None:
+    h, w = frame.shape[:2]
+    th = max(3, int(round(min(w, h) * 0.008)))
+    y0 = bar if where == "top" else h - bar - th
+    region = frame[y0 : y0 + th].astype(np.float32)
+    region *= 0.55  # dim track
+    fill = int(round(w * p))
+    if fill > 0:
+        region[:, :fill] = region[:, :fill] * 0.1 + 255 * 0.9
+    frame[y0 : y0 + th] = np.clip(region + 0.5, 0, 255).astype(np.uint8)
+
+
+_CARD_CACHE: dict[tuple[int, int, int, float], np.ndarray] = {}
+
+
+def _end_card(project: Project, t: float, w: int, h: int, src: RenderSource, content_end: float) -> np.ndarray:
+    """Closing card: the last picture blurred and darkened, with the end card text."""
+    s = project.settings
+    fps = s.fps or 30
+    key = (id(project), w, h, round(content_end, 3))
+    bg = _CARD_CACHE.get(key)
+    if bg is None:
+        last = render_frame(project.model_copy(update={"settings": s.model_copy(update={
+            "end_card": None, "progress_bar": "off", "fade_out": 0.0})}), max(0.0, content_end - 1.0 / fps), w, h, src,
+            captions=False)
+        small = cv2.resize(last, (max(2, w // 8), max(2, h // 8)), interpolation=cv2.INTER_AREA)
+        small = cv2.GaussianBlur(small, (0, 0), 2.5)
+        bg = (cv2.resize(small, (w, h), interpolation=cv2.INTER_LINEAR).astype(np.float32) * 0.45).astype(np.uint8)
+        if len(_CARD_CACHE) > 8:
+            _CARD_CACHE.clear()
+        _CARD_CACHE[key] = bg
+    frame = bg.copy()
+    age, remaining = t - content_end, project.duration - t
+    draw_text(frame, s.end_card or "", "title", "center", age, remaining)
+    if s.fade_out > 0 and remaining < s.fade_out:
+        frame = (frame.astype(np.float32) * max(0.0, remaining / s.fade_out)).astype(np.uint8)
     return frame
 
 

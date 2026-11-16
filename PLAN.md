@@ -451,4 +451,4 @@ A do-everything editor cannot beat CapCut, Adobe or free DaVinci Resolve head-on
 2. Publish the n8n community node to npm and the workflow templates to n8n.io (both tested in n8n 2.47.7).
 3. Signed Windows installer that ships the engine, `aieditor` CLI, whisper and the first-run model downloader.
 4. Onboarding + hardware benchmark; opt-in crash reports.
-5. Leftovers from C: word-by-word animated captions, progress bar and end card; caption placement that avoids faces and burned-in titles.
+5. ~~Leftovers from C~~ done: spoken word highlighted in bold captions, `progress_bar` and `end_card` (DSL, reel options), captions moved off faces and burned-in titles on export (video/placement.py). Limits: without the YuNet model faces come from skin colour; a caption that starts while a title is fading out can still overlap it.

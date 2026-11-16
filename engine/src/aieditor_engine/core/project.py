@@ -213,7 +213,7 @@ class Marker(BaseModel):
 
 
 CaptionStyle = Literal["clean", "bold_pop", "cinematic", "boxed", "title", "minimal"]
-CaptionPosition = Literal["bottom", "center", "top", "lower_third"]
+CaptionPosition = Literal["bottom", "center", "top", "lower_third", "center_low", "high"]
 
 
 class Caption(BaseModel):
@@ -226,6 +226,8 @@ class Caption(BaseModel):
     style: CaptionStyle = "clean"
     position: CaptionPosition | None = None  # None = the style's default
     kind: Literal["caption", "title"] = "caption"
+    words: list[float] | None = Field(None, description="Start of each word, seconds after `start` (word-by-word highlight)")
+    auto_position: bool = Field(False, description="position was chosen by the engine to avoid faces / on-screen text")
 
 
 class ProjectSettings(BaseModel):
@@ -237,6 +239,9 @@ class ProjectSettings(BaseModel):
     normalize_audio: bool = True
     fade_in: float = Field(0.0, ge=0, le=10, description="Whole-video fade from black")
     fade_out: float = Field(0.0, ge=0, le=10)
+    progress_bar: Literal["off", "top", "bottom"] = "off"
+    end_card: str | None = Field(None, max_length=120, description="Text on a closing card after the last clip")
+    end_card_seconds: float = Field(1.5, ge=0.5, le=10)
 
 
 class Project(BaseModel):
@@ -254,10 +259,16 @@ class Project(BaseModel):
     markers: list[Marker] = Field(default_factory=list)
 
     @property
-    def duration(self) -> float:
+    def content_end(self) -> float:
+        """End of the clips and captions (without the end card)."""
         ends = [c.end for t in self.tracks for c in t.clips]
         ends += [c.end for c in self.captions]
         return max(ends, default=0.0)
+
+    @property
+    def duration(self) -> float:
+        end = self.content_end
+        return end + self.settings.end_card_seconds if self.settings.end_card and end > 0 else end
 
     def find_track(self, track_id: str) -> Track:
         for track in self.tracks:

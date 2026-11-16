@@ -13,6 +13,8 @@
     fade_out 1
     title "Bali 2026" at=0 dur=2.5 style=title
     captions bold_pop
+    progress_bar top
+    end_card "Follow for part 2" dur=1.5
 
 Layers: a clip can be placed and animated, and `overlay` puts media on a track
 above the main video at a timeline time:
@@ -58,7 +60,9 @@ TRANSITIONS = ("crossfade", "fade_black", "fade_white", "wipe_left", "wipe_right
 MOTIONS = ("none", "zoom_in", "zoom_out", "pan_left", "pan_right")
 CAPTION_STYLES = ("clean", "bold_pop", "cinematic", "boxed", "title", "minimal")
 BLENDS = ("normal", "add", "screen", "multiply", "overlay")
-VIDEO_STATEMENTS = ("aspect", "clip", "overlay", "music", "letterbox", "fade_in", "fade_out", "title", "text", "captions", "transition", "fps")
+VIDEO_STATEMENTS = ("aspect", "clip", "overlay", "music", "letterbox", "fade_in", "fade_out", "title", "text", "captions", "transition", "fps",
+                    "progress_bar", "end_card")
+POSITIONS = ("bottom", "center", "top", "lower_third", "center_low", "high")
 STILL_SECONDS = 3.0
 
 
@@ -325,8 +329,8 @@ def apply_video_program(
                 at = _num(kv.get("at", "0"), "at", 0)
                 dur = _num(kv.get("dur", "3"), "dur", 0.3, 60)
                 position = kv.get("pos")
-                if position not in (None, "bottom", "center", "top", "lower_third"):
-                    raise VideoDslError("pos must be bottom, center, top or lower_third")
+                if position is not None and position not in POSITIONS:
+                    raise VideoDslError(f"pos must be one of {', '.join(POSITIONS)}")
                 p.captions.append(Caption(id=new_id("cap"), start=at, end=at + dur, text=" ".join(pos)[:300],
                                           style=style, position=position, kind="title" if name == "title" else "caption"))  # type: ignore[arg-type]
             elif name == "captions":
@@ -334,6 +338,18 @@ def apply_video_program(
                 if style not in CAPTION_STYLES:
                     raise VideoDslError(f"captions style must be one of {', '.join(CAPTION_STYLES)}")
                 pending_captions = style
+            elif name == "progress_bar":
+                v = pos[0] if pos else "top"
+                if v not in ("top", "bottom", "off", "none"):
+                    raise VideoDslError("progress_bar must be top, bottom or off")
+                p.settings.progress_bar = "off" if v == "none" else v  # type: ignore[assignment]
+            elif name == "end_card":
+                text = " ".join(pos).strip()
+                if text.lower() in ("", "off", "none"):
+                    p.settings.end_card = None
+                else:
+                    p.settings.end_card = text[:120]
+                    p.settings.end_card_seconds = _num(kv.get("dur", "1.5"), "dur", 0.5, 10)
             elif name == "transition":
                 kind = pos[0] if pos else "crossfade"
                 if kind not in TRANSITIONS + ("none",):
@@ -470,8 +486,14 @@ def timeline_to_dsl(p: Project) -> str:
     for c in p.captions:
         if c.kind == "title":
             text = c.text.replace('"', "'")
-            lines.append(f'title "{text}" at={_fmt(c.start)} dur={_fmt(c.end - c.start)} style={c.style}')
+            line = f'title "{text}" at={_fmt(c.start)} dur={_fmt(c.end - c.start)} style={c.style}'
+            lines.append(line + (f" pos={c.position}" if c.position else ""))
     caps = [c for c in p.captions if c.kind == "caption"]
     if caps:
         lines.append(f"captions {caps[0].style}")
+    if s.progress_bar != "off":
+        lines.append(f"progress_bar {s.progress_bar}")
+    if s.end_card:
+        text = s.end_card.replace('"', "'")
+        lines.append(f'end_card "{text}" dur={_fmt(s.end_card_seconds)}')
     return "\n".join(lines)

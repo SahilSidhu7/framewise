@@ -47,6 +47,8 @@ class ReelOptions(BaseModel):
     captions: bool | None = None
     tighten: bool = Field(True, description="Cut long pauses and filler words")
     source: int | None = Field(None, ge=1, description="Which input is the long video (default: longest with speech)")
+    progress_bar: bool = Field(True, description="Thin progress bar at the top")
+    end_card: str | None = Field(None, max_length=120, description="Text on a 1.5 s closing card, e.g. 'Follow for part 2'")
 
 
 class HighlightOptions(BaseModel):
@@ -221,7 +223,8 @@ def run_reel(ctx: JobContext) -> dict[str, Any]:
     ctx.check()
     try:
         res = make_reels(vc, media_number=o.source, count=o.count, length=o.length, style=ctx.style, output=ctx.output,
-                         captions=o.captions, tighten=o.tighten, subject_of=s.subject_track, styles_dir=s.styles_dir)
+                         captions=o.captions, tighten=o.tighten, subject_of=s.subject_track, styles_dir=s.styles_dir,
+                         progress_bar=o.progress_bar, end_card=o.end_card or None)
     except (OptionError, ValueError) as exc:
         raise RecipeError(str(exc)) from exc
     reels = []

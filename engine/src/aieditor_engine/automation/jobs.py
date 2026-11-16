@@ -245,8 +245,10 @@ class JobManager:
             raise LicenceRequired("webhook")
         if recipe == "photo_edit" and n_inputs > 1:
             raise LicenceRequired("batch")
-        if recipe == "reel" and int(req.options.get("count", 3)) > 1:
+        if recipe == "reel" and (int(req.options.get("count", 3)) > 1 or (req.output and (req.output.versions or 1) > 1)):
             req.options = {**req.options, "count": 1}
+            if req.output and req.output.versions:
+                req.output = req.output.model_copy(update={"versions": 1})
             return ["The free version makes 1 reel per video; Pro makes up to 10."]
         return []
 

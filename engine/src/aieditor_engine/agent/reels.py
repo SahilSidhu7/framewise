@@ -39,7 +39,8 @@ def pick_source(ctx: VideoContext, media_number: int | None) -> MediaInfo:
 
 def reel_program(
     m: MediaInfo, moment: Moment, *, aspect: str, look: str | None, strength: float, captions: str | None,
-    music: int | None, tighten: bool, subject: dict[str, Any] | None,
+    music: int | None, tighten: bool, subject: dict[str, Any] | None, progress_bar: bool = False,
+    end_card: str | None = None,
 ) -> tuple[str, dict[str, Any]]:
     w, h = ASPECTS[aspect]
     ranges = keep_ranges(m.transcript, moment.start, moment.end) if tighten and m.speech else [(moment.start, moment.end)]
@@ -58,6 +59,11 @@ def reel_program(
     lines.append("fade_out 0.4")
     if captions and m.speech:
         lines.append(f"captions {captions}")
+    if progress_bar:
+        lines.append("progress_bar top")
+    if end_card:
+        text = end_card.replace('"', "'")[:120]
+        lines.append(f'end_card "{text}" dur=1.5')
     duration = sum(b - a for a, b in ranges)
     info = {
         "pieces": len(ranges), "duration": round(duration, 2), "silence_removed": round(saved_seconds(ranges, moment.start, moment.end), 2),
@@ -70,6 +76,7 @@ def make_reels(
     ctx: VideoContext, *, media_number: int | None = None, count: int = 3, length: float | None = None,
     style: str | None = None, output: OutputOptions | None = None, captions: bool | None = None, tighten: bool = True,
     use_llm: bool = True, subject_of: Callable[[str], dict[str, Any] | None] | None = None, styles_dir: Path | None = None,
+    progress_bar: bool = True, end_card: str | None = None,
 ) -> dict[str, Any]:
     """Ranked reel programs for one source video. Nothing is applied."""
     styles = video_styles(styles_dir)
@@ -103,7 +110,7 @@ def make_reels(
     variations = []
     for mo in moments:
         program, info = reel_program(m, mo, aspect=aspect, look=look, strength=0.75, captions=cap_style, music=music,
-                                     tighten=tighten, subject=subject)
+                                     tighten=tighten, subject=subject, progress_bar=progress_bar, end_card=end_card)
         variations.append({
             "program": program, "title": mo.title, "rationale": mo.reason, "score": round(mo.score, 3), "source": "highlights",
             "moment": mo.to_json(), "info": info, "warnings": [],

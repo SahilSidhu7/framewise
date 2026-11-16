@@ -62,6 +62,11 @@ def timeline_words(p: Project, transcripts: dict[str, dict[str, Any]]) -> list[d
 
 
 def group_words(words: list[dict[str, Any]], style: str) -> list[tuple[float, float, str]]:
+    return [(s, e, t) for s, e, t, _ in group_words_timed(words, style)]
+
+
+def group_words_timed(words: list[dict[str, Any]], style: str) -> list[tuple[float, float, str, list[float]]]:
+    """Like group_words, plus each word's start relative to the caption start."""
     max_chars, max_dur = LIMITS.get(style, DEFAULT_LIMIT)
     groups: list[list[dict[str, Any]]] = []
     cur: list[dict[str, Any]] = []
@@ -80,15 +85,18 @@ def group_words(words: list[dict[str, Any]], style: str) -> list[tuple[float, fl
         start, end = g[0]["start"], g[-1]["end"]
         nxt = groups[i + 1][0]["start"] if i + 1 < len(groups) else end + 1.0
         end = min(max(end, start + 0.7), nxt)  # minimum reading time, never overlap the next
-        text = " ".join(x["text"] for x in g).strip()
+        toks = [str(x["text"]).strip() for x in g]
+        text = " ".join(toks).strip()
         if text:
-            out.append((start, max(end, start + 0.2), text))
+            rel = [round(max(0.0, x["start"] - start), 3) for x, tok in zip(g, toks, strict=True) for _ in tok.split()]
+            out.append((start, max(end, start + 0.2), text, rel))
     return out
 
 
 def captions_from_transcripts(p: Project, transcripts: dict[str, dict[str, Any]], style: str) -> list[Caption]:
     words = timeline_words(p, transcripts)
     return [
-        Caption(id=new_id("cap"), start=round(s, 3), end=round(e, 3), text=text[:300], style=style, kind="caption")  # type: ignore[arg-type]
-        for s, e, text in group_words(words, style)
+        Caption(id=new_id("cap"), start=round(s, 3), end=round(e, 3), text=text[:300], style=style, kind="caption",  # type: ignore[arg-type]
+                words=rel if len(text) <= 300 else None)
+        for s, e, text, rel in group_words_timed(words, style)
     ]

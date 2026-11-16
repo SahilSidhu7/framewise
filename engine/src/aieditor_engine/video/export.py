@@ -104,6 +104,7 @@ class ExportSpec:
     audio: bool = True
     encoder: str | None = None
     workers: int | None = None
+    place_captions: bool = True  # move auto-positioned captions off faces and burned-in text
 
 
 ProgressFn = Callable[[float], None]
@@ -126,6 +127,16 @@ def export_video(
     duration = project.duration
     if duration <= 0:
         raise ValueError("the timeline is empty")
+    if spec.place_captions and any(c.kind == "caption" for c in project.captions):
+        from .placement import place_captions
+
+        project = project.model_copy(deep=True)  # never touch the caller's (undoable) project
+        channel = f"place-{id(spec)}"
+        try:
+            placed = place_captions(project, RenderSource(root=root, use_proxy=True, channel=channel))
+        finally:
+            READERS.drop_channel(channel)
+        log.info("caption placement: %s", placed)
     w, h = spec.width - spec.width % 2, spec.height - spec.height % 2
     rate = _rate(spec.fps)
     fps = float(rate)
