@@ -3,6 +3,7 @@ import type { IAuthenticateGeneric, ICredentialTestRequest, ICredentialType, INo
 export class AIEditorApi implements ICredentialType {
 	name = 'aiEditorApi';
 	displayName = 'AIEditor API';
+	icon = 'file:aieditor.svg' as const;
 	properties: INodeProperties[] = [
 		{
 			displayName: 'Engine URL',

@@ -17,7 +17,7 @@
     "dist"
   ],
   "scripts": {
-    "build": "tsc && node -e \"require('fs').cpSync('nodes/AIEditor/aieditor.svg','dist/nodes/AIEditor/aieditor.svg')\"",
+    "build": "tsc && node -e \"const fs=require('fs');for(const d of ['nodes/AIEditor','credentials'])fs.cpSync('nodes/AIEditor/aieditor.svg','dist/'+d+'/aieditor.svg')\"",
     "dev": "tsc --watch",
     "test:live": "node test/live.js"
   },

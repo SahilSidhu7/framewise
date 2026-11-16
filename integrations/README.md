@@ -72,13 +72,18 @@ return [{ json: JSON.parse(raw.toString('utf8')) }];
   (and optionally `AIEDITOR_URL`, `AIEDITOR_INPUT`, `AIEDITOR_OUTPUT`) in n8n's environment. It uploads a video,
   makes 3 TikTok reels, waits and saves the files. n8n in Docker on the same PC reaches the engine at
   `http://host.docker.internal:8765`.
+  n8n 2.x blocks `$env` in expressions and limits file access by default, so for this template set
+  `N8N_BLOCK_ENV_ACCESS_IN_NODE=false` and add your input and output folders to `N8N_RESTRICT_FILE_ACCESS_TO`
+  (separated by `;`). It asks for 3 reels of 30 s; a short video gives fewer, since each reel needs its own
+  strong moment.
 - **Community node:** [`n8n-nodes-aieditor`](n8n-nodes-aieditor) adds an *AIEditor* node (Make Reels, Find
   Highlights, Add Captions, Edit Video, Edit Photo, Render Program, Transcribe, Get Job, Cancel Job) that uploads
   binary data from the previous node, waits, and returns the results as binary `file_1..n`.
   Build: `npm install && npm run build`, then install the folder in n8n (Settings > Community nodes, or
-  `npm install <path>` inside `~/.n8n/custom`). `npm run test:live -- http://127.0.0.1:8765 <key> <media dir>`
+  `npm install <path>` inside `~/.n8n/custom`, or point `N8N_CUSTOM_EXTENSIONS` at the built `dist` folder). `npm run test:live -- http://127.0.0.1:8765 <key> <media dir>`
   runs every operation of the built node against a running engine without n8n (the media dir needs
-  `food.jpg`, `portrait.jpg` and `interview.webm`).
+  `food.jpg`, `portrait.jpg` and `interview.webm`). Tested with n8n 2.47.7: the node, its credential test and
+  the HTTP template all run there.
 
 ## Command line
 
