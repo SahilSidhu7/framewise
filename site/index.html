@@ -1,0 +1,346 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>AIEditor · AI video editor that runs on your PC</title>
+<meta name="description" content="Edit photos and videos by describing what you want. Long videos become captioned reels automatically. Runs on your own computer: private, no subscription, and you can automate it with n8n.">
+<meta property="og:title" content="AIEditor: the AI video editor that runs on your PC">
+<meta property="og:description" content="Private. No subscription. Automate it.">
+<meta name="theme-color" content="#0d1424">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,800&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: dark "edit bay" hero with a live timeline mock, then light reading sections on a 12-col grid. */
+:root {
+  --ink: #0d1424; --ink-2: #16213a; --paper: #f3f5f9; --card: #ffffff; --text: #111a2b; --muted: #556072;
+  --line: #d9dee8; --playhead: #ff6a13; --word: #ffd60a; --clip-a: #3b6fd8; --clip-b: #7a5af0; --clip-c: #1f9d8b;
+  --display: "Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
+  --body: "Inter", "Segoe UI", system-ui, sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, Consolas, monospace;
+  color-scheme: light;
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body { margin: 0; background: var(--paper); color: var(--text); font: 16px/1.6 var(--body); }
+a { color: inherit; }
+.gutter { padding-left: max(20px, env(safe-area-inset-left, 0px)); padding-right: max(20px, env(safe-area-inset-right, 0px)); }
+.inner { max-width: 1120px; margin: 0 auto; }
+
+/* top bar */
+.bar { background: var(--ink); color: #dfe6f3; }
+.bar .inner { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding-block: 18px; }
+.logo { display: flex; align-items: center; gap: 10px; font: 800 20px var(--display); text-decoration: none; color: #fff; }
+.logo svg { width: 28px; height: 28px; }
+.bar nav { display: flex; gap: 22px; font-size: 14px; flex-wrap: wrap; }
+.bar nav a { text-decoration: none; color: #b9c4d8; }
+.bar nav a:hover, .bar nav a:focus-visible { color: #fff; }
+
+/* hero */
+.hero { background: var(--ink); color: #eef2f9; padding-block: 40px 72px; overflow: hidden; }
+.hero .inner { display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr); gap: 48px; align-items: center; }
+.kicker { font: 600 12px var(--mono); letter-spacing: .12em; text-transform: uppercase; color: var(--playhead); margin: 0 0 14px; }
+h1 { font: 800 clamp(38px, 5.6vw, 66px)/1.02 var(--display); margin: 0 0 20px; letter-spacing: -.02em; text-wrap: balance; }
+h1 em { font-style: normal; color: var(--word); }
+.lede { font-size: 18px; color: #b9c4d8; max-width: 52ch; margin: 0 0 28px; }
+.ctas { display: flex; flex-wrap: wrap; gap: 12px; }
+.btn { display: inline-flex; align-items: center; gap: 8px; padding: 12px 20px; border-radius: 10px; font-weight: 600; text-decoration: none; font-size: 15px; border: 1px solid transparent; }
+.btn-primary { background: var(--playhead); color: #1a0c02; }
+.btn-primary:hover { background: #ff8740; }
+.btn-ghost { border-color: #344361; color: #e3e9f4; }
+.btn-ghost:hover { border-color: #6b7da3; }
+.btn:focus-visible { outline: 3px solid var(--word); outline-offset: 2px; }
+.note { font-size: 13px; color: #8392ad; margin-top: 14px; }
+
+/* editor mock */
+.bay { background: var(--ink-2); border: 1px solid #263452; border-radius: 16px; padding: 14px; box-shadow: 0 30px 80px -30px #000a; min-width: 0; }
+.viewer { position: relative; aspect-ratio: 16 / 9; border-radius: 10px; overflow: hidden;
+  background: radial-gradient(120% 90% at 30% 20%, #4b6cb7 0%, #24345e 45%, #121a30 100%); }
+.viewer .sun { position: absolute; width: 34%; aspect-ratio: 1; border-radius: 50%; left: 58%; top: 18%;
+  background: radial-gradient(circle, #ffd27a 0%, #ff8a3d 55%, transparent 70%); filter: blur(1px); }
+.viewer .hill { position: absolute; inset: auto -10% -30% -10%; height: 70%; border-radius: 50% 50% 0 0; background: #0f1b33; }
+.viewer .hill.b { left: 30%; height: 55%; background: #172747; }
+.cap { position: absolute; left: 0; right: 0; bottom: 14%; text-align: center; font: 800 clamp(14px, 2.2vw, 22px) var(--display);
+  letter-spacing: .02em; text-transform: uppercase; color: #fff; text-shadow: 0 2px 0 #000, 0 0 6px #000; }
+.cap span { transition: color .15s; }
+.cap span.on { color: var(--word); }
+.prog { position: absolute; top: 0; left: 0; height: 4px; background: #fff; width: 0; }
+.prompt { display: flex; gap: 8px; align-items: center; margin: 12px 0; background: #0d1527; border: 1px solid #263452; border-radius: 10px; padding: 9px 12px;
+  font: 14px var(--mono); color: #c9d4e8; min-width: 0; }
+.prompt b { color: var(--playhead); }
+.prompt .typed { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; min-width: 0; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
+.chip { font: 600 11px var(--mono); padding: 4px 9px; border-radius: 99px; background: #1e2b48; color: #c2cde3; }
+.chip.sel { background: #3a2a14; color: #ffc48f; }
+.tl { position: relative; display: grid; gap: 6px; padding-top: 18px; }
+.ruler { position: absolute; top: 0; left: 44px; right: 0; height: 12px; background: repeating-linear-gradient(90deg, #3b4a6b 0 1px, transparent 1px 10%); }
+.row { display: grid; grid-template-columns: 38px minmax(0, 1fr); gap: 6px; align-items: center; }
+.row i { font: 600 10px var(--mono); color: #7f8db0; font-style: normal; }
+.lane { position: relative; height: 22px; border-radius: 5px; background: #0d1527; overflow: hidden; }
+.lane b { position: absolute; top: 2px; bottom: 2px; border-radius: 4px; }
+.lane .wave { background: repeating-linear-gradient(90deg, #2c7a6e 0 2px, transparent 2px 4px); opacity: .9; }
+.playhead { position: absolute; top: 12px; bottom: -4px; width: 2px; left: 44px; background: var(--playhead); box-shadow: 0 0 10px var(--playhead); }
+.playhead::before { content: ""; position: absolute; top: -6px; left: -5px; border: 6px solid transparent; border-top-color: var(--playhead); }
+
+/* sections */
+section { padding-block: 84px; }
+.eyebrow { font: 600 12px var(--mono); letter-spacing: .12em; text-transform: uppercase; color: #c2410c; margin: 0 0 10px; }
+h2 { font: 800 clamp(28px, 3.6vw, 42px)/1.08 var(--display); margin: 0 0 14px; letter-spacing: -.015em; text-wrap: balance; max-width: 22ch; }
+.sub { color: var(--muted); max-width: 62ch; margin: 0 0 40px; font-size: 17px; }
+.steps { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px; }
+.step { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 22px; }
+.step .n { font: 800 34px var(--display); color: var(--playhead); line-height: 1; }
+.step h3 { font: 800 20px var(--display); margin: 10px 0 6px; }
+.step p { margin: 0; color: var(--muted); }
+.feat { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 20px; }
+.f { grid-column: span 4; padding: 22px 0; border-top: 2px solid var(--text); }
+.f.wide { grid-column: span 6; }
+.f h3 { font: 800 19px var(--display); margin: 0 0 6px; }
+.f p { margin: 0; color: var(--muted); }
+
+.dark { background: var(--ink); color: #e9eef7; }
+.dark .sub { color: #a9b5cb; }
+.dark .eyebrow { color: var(--playhead); }
+.auto { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 40px; align-items: start; }
+pre.term { margin: 0; background: #0a101d; border: 1px solid #263452; border-radius: 12px; padding: 18px; overflow-x: auto;
+  font: 13.5px/1.7 var(--mono); color: #d3dcee; }
+pre.term .c { color: #6f7f9f; } pre.term .k { color: var(--word); } pre.term .s { color: #8fd3b6; }
+.flow { display: grid; gap: 10px; }
+.flow div { display: flex; gap: 12px; align-items: flex-start; background: #121b30; border: 1px solid #263452; border-radius: 10px; padding: 12px 14px; }
+.flow b { font: 600 12px var(--mono); color: var(--ink); background: var(--word); border-radius: 6px; padding: 2px 7px; flex: none; }
+.flow span { color: #c9d4e8; font-size: 15px; }
+
+.privacy { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 20px; }
+.privacy div { border-left: 3px solid var(--clip-c); padding-left: 14px; }
+.privacy h3 { font: 800 18px var(--display); margin: 0 0 4px; }
+.privacy p { margin: 0; color: var(--muted); font-size: 15px; }
+
+.plans { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px; align-items: stretch; }
+.plan { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 26px; display: flex; flex-direction: column; gap: 14px; }
+.plan.hl { border: 2px solid var(--playhead); }
+.plan h3 { font: 800 22px var(--display); margin: 0; }
+.price { font: 800 36px var(--display); line-height: 1; }
+.price small { font: 500 14px var(--body); color: var(--muted); }
+.plan ul { margin: 0; padding-left: 18px; color: var(--muted); display: grid; gap: 6px; }
+.plan .tagline { color: var(--muted); margin: 0; font-size: 15px; }
+.fine { margin-top: 18px; font-size: 13px; color: var(--muted); }
+
+.faq { display: grid; gap: 10px; max-width: 780px; }
+details { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 16px 20px; }
+summary { font: 700 17px var(--display); cursor: pointer; }
+details p { margin: 10px 0 0; color: var(--muted); }
+
+footer { background: var(--ink); color: #8392ad; font-size: 14px; }
+footer .inner { padding-block: 36px; display: flex; flex-wrap: wrap; gap: 12px 28px; justify-content: space-between; }
+
+@media (max-width: 900px) {
+  .hero .inner, .auto { grid-template-columns: minmax(0, 1fr); }
+  .steps, .plans { grid-template-columns: minmax(0, 1fr); }
+  .privacy { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .f, .f.wide { grid-column: span 12; }
+  .bar nav { display: none; }
+}
+@media (max-width: 520px) { .privacy { grid-template-columns: minmax(0, 1fr); } section { padding-block: 60px; } }
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } .playhead, .prog { transition: none !important; } }
+</style>
+</head>
+<body>
+
+<header class="bar gutter">
+  <div class="inner">
+    <a class="logo" href="/" aria-label="AIEditor home">
+      <svg viewBox="0 0 32 32" aria-hidden="true"><rect x="2" y="6" width="28" height="20" rx="5" fill="#16213a" stroke="#ff6a13" stroke-width="2"/><rect x="6" y="18" width="7" height="4" rx="1.5" fill="#3b6fd8"/><rect x="14" y="18" width="5" height="4" rx="1.5" fill="#7a5af0"/><rect x="20" y="18" width="6" height="4" rx="1.5" fill="#1f9d8b"/><path d="M13 10.5v5l4.5-2.5z" fill="#ffd60a"/><rect x="16.2" y="16" width="1.6" height="8" fill="#ff6a13"/></svg>
+      AIEditor
+    </a>
+    <nav aria-label="Main">
+      <a href="#how">How it works</a>
+      <a href="#features">Features</a>
+      <a href="#automation">Automation</a>
+      <a href="#pricing">Pricing</a>
+      <a href="#faq">FAQ</a>
+    </nav>
+  </div>
+</header>
+
+<div class="hero gutter">
+  <div class="inner">
+    <div>
+      <p class="kicker">Windows beta · in testing</p>
+      <h1>The AI video editor that runs <em>on your PC</em>.</h1>
+      <p class="lede">Describe the edit you want and pick a style. AIEditor cuts, colours, captions and exports it, and turns long videos into ready-to-post reels. Private, no subscription, and you can automate it.</p>
+      <div class="ctas">
+        <a class="btn btn-primary" href="#how">See how it works</a>
+        <a class="btn btn-ghost" href="#automation">See the automation API</a>
+      </div>
+      <p class="note">Free for editing. Your footage never leaves your computer.</p>
+    </div>
+
+    <div class="bay" aria-label="Example of the editor making a reel">
+      <div class="viewer">
+        <div class="sun"></div><div class="hill"></div><div class="hill b"></div>
+        <div class="prog" id="prog"></div>
+        <div class="cap" id="cap"><span>Sunset</span> <span>over</span> <span>the</span> <span>hills</span></div>
+      </div>
+      <div class="prompt"><b>&gt;</b><span class="typed">make a 30 s travel reel, upbeat, captions</span></div>
+      <div class="chips"><span class="chip sel">Travel</span><span class="chip sel">TikTok 9:16</span><span class="chip">30 s</span><span class="chip">3 versions</span><span class="chip">Music on</span></div>
+      <div class="tl">
+        <div class="ruler"></div>
+        <div class="row"><i>V1</i><div class="lane"><b style="left:0;width:30%;background:var(--clip-a)"></b><b style="left:31%;width:22%;background:var(--clip-b)"></b><b style="left:54%;width:46%;background:var(--clip-a)"></b></div></div>
+        <div class="row"><i>TXT</i><div class="lane"><b style="left:4%;width:18%;background:#5c4a12"></b><b style="left:24%;width:22%;background:#5c4a12"></b><b style="left:50%;width:26%;background:#5c4a12"></b><b style="left:79%;width:17%;background:#5c4a12"></b></div></div>
+        <div class="row"><i>A1</i><div class="lane"><b class="wave" style="left:0;width:100%"></b></div></div>
+        <div class="playhead" id="ph"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<main>
+<section id="how" class="gutter">
+  <div class="inner">
+    <p class="eyebrow">How it works</p>
+    <h2>Three steps, no editing vocabulary needed.</h2>
+    <p class="sub">You never have to know what a keyframe or a LUT is. Say what you want; the editor does the technical part and shows you a few versions to choose from.</p>
+    <div class="steps">
+      <div class="step"><div class="n">1</div><h3>Drop in your clips</h3><p>Phone videos, photos, a song. Long recordings work too: the editor listens to the speech and finds the good parts.</p></div>
+      <div class="step"><div class="n">2</div><h3>Say what you want</h3><p>"Fun travel recap", "cinematic", "30-second TikTok". Pick a style and where it's going, or leave it on Auto.</p></div>
+      <div class="step"><div class="n">3</div><h3>Pick a version</h3><p>Preview the options, keep the one you like, tweak anything by hand. Every AI change is one undo away.</p></div>
+    </div>
+  </div>
+</section>
+
+<section id="features" class="gutter" style="padding-top:0">
+  <div class="inner">
+    <p class="eyebrow">What it does today</p>
+    <h2>Built for people who post, and people who automate.</h2>
+    <div class="feat">
+      <div class="f wide"><h3>Long video to reels</h3><p>One interview or stream in, several vertical clips out: best moments first, pauses and filler words cut, the speaker kept in frame, captions on.</p></div>
+      <div class="f wide"><h3>Captions that stay out of the way</h3><p>Word-by-word highlighted captions that move off faces and away from titles already in the video. Exports an .srt as well.</p></div>
+      <div class="f"><h3>Edit by prompt</h3><p>Cuts on the beat, transitions, colour looks, titles and music from one sentence, with style and output options next to the prompt.</p></div>
+      <div class="f"><h3>Photo fixes</h3><p>Exposure, white balance and colour casts corrected, with looks for food, portraits, products and more.</p></div>
+      <div class="f"><h3>Layered timeline</h3><p>Overlays, picture-in-picture, blend modes, opacity and keyframes underneath, for when you want full control.</p></div>
+    </div>
+  </div>
+</section>
+
+<section id="automation" class="dark gutter">
+  <div class="inner auto">
+    <div>
+      <p class="eyebrow">Automation</p>
+      <h2>Your PC becomes a clipping engine.</h2>
+      <p class="sub">Run AIEditor without the window and drive it from n8n, Zapier, scripts or AI agents. Cloud clipping tools charge per minute of video; this runs on hardware you already own.</p>
+      <div class="flow">
+        <div><b>n8n</b><span>Community node and ready-made workflow: video in, captioned shorts out.</span></div>
+        <div><b>HTTP</b><span>Job API with API keys, uploads, long-polling and signed webhooks.</span></div>
+        <div><b>CLI</b><span>One command per task, for scripts and scheduled jobs.</span></div>
+        <div><b>Folders</b><span>Drop a file into a watched folder, get the edit back next to it.</span></div>
+        <div><b>MCP</b><span>AI agents can call the same recipes on local files.</span></div>
+      </div>
+    </div>
+    <pre class="term" aria-label="Command line example"><span class="c"># one long video in, three TikTok reels out</span>
+<span class="k">aieditor</span> reel talk.mp4 --platform tiktok --set count=3 --out shorts/
+
+<span class="c"># captions burned in, plus an .srt</span>
+<span class="k">aieditor</span> captions interview.mp4 --set style=boxed
+
+<span class="c"># headless API for n8n on http://127.0.0.1:8765</span>
+<span class="k">aieditor</span> serve
+
+<span class="c"># from any tool that speaks HTTP</span>
+curl -X POST http://127.0.0.1:8765/v1/jobs \
+  -H "Authorization: Bearer $KEY" \
+  -d <span class="s">'{"recipe":"reel","inputs":["f_..."],
+       "style":"energetic_reel",
+       "output":{"platform":"tiktok","length":30},
+       "webhook":"https://n8n.example/hook"}'</span></pre>
+  </div>
+</section>
+
+<section class="gutter">
+  <div class="inner">
+    <p class="eyebrow">Private by design</p>
+    <h2>Your footage stays on your computer.</h2>
+    <p class="sub">The AI models run locally. There is no upload step, no account for the editor, and nothing to cancel.</p>
+    <div class="privacy">
+      <div><h3>Local AI</h3><p>Speech recognition and the editing model run on your own machine.</p></div>
+      <div><h3>No account</h3><p>Install and start editing. Pro keys are checked offline.</p></div>
+      <div><h3>No telemetry</h3><p>Nothing is sent unless you add a webhook or a download link yourself.</p></div>
+      <div><h3>Own your exports</h3><p>No watermark on the free version.</p></div>
+    </div>
+  </div>
+</section>
+
+<section id="pricing" class="gutter" style="padding-top:0">
+  <div class="inner">
+    <p class="eyebrow">Pricing</p>
+    <h2>Free to edit. Pay once to automate.</h2>
+    <p class="sub">Prices are what we plan to charge at launch and may change before release.</p>
+    <div class="plans">
+      <div class="plan">
+        <h3>Free</h3>
+        <div class="price">$0</div>
+        <p class="tagline">The full desktop editor.</p>
+        <ul><li>Photo and video editing by prompt</li><li>Captions, looks, titles, music</li><li>Exports without a watermark</li><li>Command line: one reel per video</li></ul>
+      </div>
+      <div class="plan hl">
+        <h3>Pro</h3>
+        <div class="price">$59 <small>once · or $8/month</small></div>
+        <p class="tagline">Everything in Free, plus automation.</p>
+        <ul><li>Headless API for n8n, Zapier and scripts</li><li>Webhooks, watch folders, batches</li><li>Up to 10 reels per video</li><li>14-day free trial, no card</li></ul>
+      </div>
+      <div class="plan">
+        <h3>Studio</h3>
+        <div class="price">$199 <small>per seat / year</small></div>
+        <p class="tagline">For agencies and teams.</p>
+        <ul><li>Commercial multi-seat licence</li><li>Priority support</li><li>Everything in Pro</li></ul>
+      </div>
+    </div>
+    <p class="fine">Windows first; macOS (Apple Silicon) and Linux later. The beta is being tested now.</p>
+  </div>
+</section>
+
+<section id="faq" class="gutter" style="padding-top:0">
+  <div class="inner">
+    <p class="eyebrow">Questions</p>
+    <h2>Good to know</h2>
+    <div class="faq">
+      <details><summary>What computer do I need?</summary><p>A Windows 10 or 11 PC. A recent CPU works; an NVIDIA graphics card makes exports faster. A typical 1080p reel takes about a minute on a laptop CPU.</p></details>
+      <details><summary>Does anything get uploaded?</summary><p>No. Editing, speech recognition and the AI all run locally. The only network traffic is what you set up yourself, such as a webhook to your own n8n.</p></details>
+      <details><summary>How does the Pro licence work offline?</summary><p>A Pro key is digitally signed. The app checks the signature on your machine, so it keeps working without internet and there is no licence server to go down.</p></details>
+      <details><summary>Can I use it with n8n in the cloud?</summary><p>Yes, by giving cloud n8n a secure way to reach the engine on your PC (for example a tunnel with its own login). The editor itself never needs a server of ours.</p></details>
+      <details><summary>Is this good enough for professional work?</summary><p>The automatic edits are designed to look finished out of the box. For frame-accurate work, the layered timeline and every AI change are fully editable by hand.</p></details>
+    </div>
+  </div>
+</section>
+</main>
+
+<footer class="gutter">
+  <div class="inner">
+    <span>© 2026 AIEditor. Made on the editor it describes.</span>
+    <span>Windows beta in testing</span>
+  </div>
+</footer>
+
+<script>
+(() => {
+  const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const words = [...document.querySelectorAll("#cap span")];
+  const ph = document.getElementById("ph"), prog = document.getElementById("prog");
+  const lanes = document.querySelector(".tl .lane");
+  if (reduce) { words[1].classList.add("on"); prog.style.width = "40%"; return; }
+  let t = 0;
+  function tick() {
+    t = (t + 0.004) % 1;
+    const w = lanes.getBoundingClientRect().width;
+    ph.style.left = (44 + t * w) + "px";
+    prog.style.width = (t * 100) + "%";
+    const active = Math.min(words.length - 1, Math.floor((t * 4) % 1 * words.length));
+    words.forEach((el, i) => el.classList.toggle("on", i === active));
+    requestAnimationFrame(tick);
+  }
+  requestAnimationFrame(tick);
+})();
+</script>
+</body>
+</html>

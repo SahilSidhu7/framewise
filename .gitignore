@@ -29,3 +29,6 @@ Thumbs.db
 *.tsbuildinfo
 demo/output/
 demo/stock/
+
+# Cloudflare wrangler local cache (account details)
+.wrangler/

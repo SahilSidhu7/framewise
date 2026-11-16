@@ -1,0 +1,380 @@
+<title>AIEditor Architecture</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;600&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: one reading column with a sticky section index on wide screens; each section = plain-words summary, diagram, then a module/detail table. */
+:root {
+  --bg: #f6f7f9; --panel: #ffffff; --fg: #17202b; --muted: #5a6573; --line: #dde2e8;
+  --accent: #1f6feb; --accent-soft: #e6efff; --cut: #d9480f; --ok: #2b8a3e;
+  --display: "Space Grotesk", "Segoe UI", system-ui, sans-serif;
+  --body: "Inter", "Segoe UI", system-ui, sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, Consolas, monospace;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #0f141a; --panel: #161d25; --fg: #e4e9ef; --muted: #98a3b0; --line: #2a3440;
+  --accent: #6ea8ff; --accent-soft: #1b2a42; --cut: #ff8a4c; --ok: #69db7c; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #0f141a; --panel: #161d25; --fg: #e4e9ef; --muted: #98a3b0; --line: #2a3440;
+  --accent: #6ea8ff; --accent-soft: #1b2a42; --cut: #ff8a4c; --ok: #69db7c; color-scheme: dark }
+
+body { background: var(--bg); color: var(--fg); font: 15px/1.6 var(--body); }
+.wrap { max-width: 1180px; margin: 0 auto; padding-block: 32px 64px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  display: grid; grid-template-columns: 200px minmax(0, 1fr); gap: 40px; }
+nav { position: sticky; top: calc(16px + env(safe-area-inset-top, 0px)); align-self: start; font-size: 13px; }
+nav p { font: 600 11px var(--body); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin: 0 0 8px; }
+nav a { display: block; color: var(--muted); text-decoration: none; padding: 3px 0 3px 10px; border-left: 2px solid var(--line); }
+nav a:hover, nav a:focus-visible { color: var(--accent); border-color: var(--accent); outline: none; }
+main { min-width: 0; display: grid; gap: 56px; }
+header h1 { font: 700 clamp(30px, 4vw, 44px)/1.1 var(--display); margin: 0 0 12px; text-wrap: balance; }
+header p { margin: 0; max-width: 68ch; color: var(--muted); font-size: 16px; }
+.legend { display: flex; flex-wrap: wrap; gap: 8px 18px; margin-top: 18px; font-size: 13px; color: var(--muted); }
+.legend span::before { content: ""; display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 6px; vertical-align: -1px; background: var(--c); }
+section h2 { font: 700 24px/1.2 var(--display); margin: 0 0 6px; text-wrap: balance; }
+section > .eyebrow { font: 600 11px var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--accent); margin: 0 0 6px; }
+section > p { max-width: 70ch; margin: 0 0 16px; }
+.plain { background: var(--accent-soft); border-radius: 8px; padding: 12px 16px; max-width: 75ch; margin: 0 0 18px; }
+.plain b { font-family: var(--display); }
+.diagram { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 16px; overflow-x: auto; }
+.diagram pre.mermaid { margin: 0; background: transparent; min-width: 640px; }
+table { width: 100%; border-collapse: collapse; font-size: 14px; }
+.tablewrap { overflow-x: auto; margin-top: 16px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel); }
+th, td { text-align: left; padding: 9px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { font: 600 12px var(--body); letter-spacing: .04em; text-transform: uppercase; color: var(--muted); }
+tr:last-child td { border-bottom: 0; }
+code, td.m { font-family: var(--mono); font-size: 12.5px; }
+td.m { color: var(--accent); white-space: nowrap; }
+.grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 14px; margin-top: 16px; }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; min-width: 0; }
+.card h3 { font: 700 15px var(--display); margin: 0 0 4px; }
+.card p { margin: 0; color: var(--muted); font-size: 14px; }
+.tag { display: inline-block; font: 600 11px var(--mono); padding: 1px 7px; border-radius: 99px; border: 1px solid currentColor; margin-right: 4px; }
+.free { color: var(--ok); } .pro { color: var(--cut); }
+footer { color: var(--muted); font-size: 13px; border-top: 1px solid var(--line); padding-top: 16px; }
+@media (max-width: 860px) { .wrap { grid-template-columns: minmax(0, 1fr); } nav { display: none; } }
+@media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; } }
+html { scroll-behavior: smooth; }
+</style>
+
+<div class="wrap">
+<nav aria-label="Sections">
+  <p>On this page</p>
+  <a href="#map">1. The big map</a>
+  <a href="#modules">2. Modules</a>
+  <a href="#model">3. Project data model</a>
+  <a href="#prompt">4. Edit from a prompt</a>
+  <a href="#reels">5. Long video to reels</a>
+  <a href="#render">6. Rendering a frame</a>
+  <a href="#captions">7. Caption placement</a>
+  <a href="#jobs">8. Jobs and webhooks</a>
+  <a href="#licence">9. Free vs Pro</a>
+  <a href="#install">10. What gets installed</a>
+  <a href="#security">11. Security boundaries</a>
+</nav>
+
+<main>
+<header>
+  <h1>How AIEditor works</h1>
+  <p>A low-level design tour of the editor as it stands after phases A1, C, D and R1. Every box on these diagrams is a real
+  module in <code>engine/src/aieditor_engine</code> or <code>app/</code>. Each section starts with a plain-words summary, then the diagram, then the detail.</p>
+  <div class="legend">
+    <span style="--c: var(--accent)">your PC (everything runs here)</span>
+    <span style="--c: var(--cut)">Pro feature</span>
+    <span style="--c: var(--ok)">free</span>
+  </div>
+</header>
+
+<section id="map">
+  <p class="eyebrow">01 · System context</p>
+  <h2>The big map</h2>
+  <div class="plain"><b>In plain words:</b> there is one "engine" program that does all the work (AI, analysis, rendering).
+  Everything else is a way of talking to it: the desktop app, the <code>aieditor</code> command, n8n over HTTP, and AI agents over MCP.
+  Nothing leaves your computer unless you add a webhook or give it a web link to download.</div>
+  <div class="diagram"><pre class="mermaid">
+flowchart LR
+  subgraph Clients
+    UI["Desktop app<br/>React UI in Tauri shell"]
+    CLI["aieditor command<br/>reel / photo / captions ..."]
+    N8N["n8n, Zapier, scripts<br/>HTTP /v1"]
+    AGENT["AI agents<br/>MCP over stdio"]
+  end
+  subgraph Engine["Engine process (Python, FastAPI)"]
+    API["api/server.py<br/>desktop routes, token"]
+    PUB["api/public_routes.py<br/>/v1 jobs, API keys"]
+    JM["automation/jobs.py<br/>JobManager queue"]
+    REC["automation/recipes.py<br/>reel, captions, edit ..."]
+    SES["session.py<br/>project + CommandBus"]
+    AG["agent/*<br/>planner, highlights, reels"]
+    VID["video/*<br/>decode, compose, export"]
+    IMG["imaging/*<br/>photo ops, looks"]
+  end
+  subgraph Local["Local AI and storage"]
+    LLM["llama-server<br/>small local LLM"]
+    WH["whisper.cpp<br/>speech to text"]
+    FS["Project folder<br/>media, proxies, cache"]
+    HOME["%LOCALAPPDATA%/AIEditor<br/>licence, keys, jobs, models"]
+  end
+  UI -- "per-launch token" --> API
+  CLI --> JM
+  AGENT --> JM
+  N8N -- "API key" --> PUB --> JM
+  API --> SES
+  JM --> REC --> SES
+  SES --> AG & VID & IMG
+  AG --> LLM
+  AG --> WH
+  VID --> FS
+  JM --> HOME
+  JM -. "signed webhook" .-> N8N
+  </pre></div>
+</section>
+
+<section id="modules">
+  <p class="eyebrow">02 · Packages</p>
+  <h2>Modules and what each one owns</h2>
+  <div class="plain"><b>In plain words:</b> the code is split by job. <b>core</b> knows what a project is and how to change it safely (with undo).
+  <b>agent</b> decides what to do. <b>video</b> and <b>imaging</b> actually make pixels. <b>automation</b> runs work in the background for other tools.</div>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Package</th><th>Key files</th><th>Responsibility</th></tr></thead>
+    <tbody>
+      <tr><td class="m">core</td><td><code>project.py</code>, <code>bus.py</code>, <code>video_commands.py</code></td><td>Pydantic project model (tracks, clips, captions, grade). Every change is a named command on the CommandBus, so the app and the AI share one undo history.</td></tr>
+      <tr><td class="m">agent</td><td><code>video_planner.py</code>, <code>planner.py</code>, <code>highlights.py</code>, <code>reels.py</code>, <code>cleanup.py</code>, <code>options.py</code>, <code>llm.py</code>, <code>whisper.py</code></td><td>Turns a prompt plus style/output options into Edit DSL programs. Finds the best moments, cuts pauses and filler words, talks to the local LLM and whisper.</td></tr>
+      <tr><td class="m">video</td><td><code>vdsl.py</code>, <code>compose.py</code>, <code>text.py</code>, <code>captions.py</code>, <code>placement.py</code>, <code>reframe.py</code>, <code>audio.py</code>, <code>export.py</code></td><td>Video Edit DSL parser/decompiler, layered compositor, caption drawing and placement, subject tracking for 9:16, audio mix with loudness, parallel segment export.</td></tr>
+      <tr><td class="m">imaging</td><td><code>ops.py</code>, <code>render.py</code>, <code>recipes/</code></td><td>Photo operations and looks; also the colour grade used on every video frame (baked into a 3D LUT by <code>video/fastgrade.py</code>).</td></tr>
+      <tr><td class="m">automation</td><td><code>jobs.py</code>, <code>recipes.py</code>, <code>keys.py</code>, <code>webhooks.py</code>, <code>watch.py</code>, <code>mcp.py</code></td><td>Job queue that survives restarts, seven recipes, hashed API keys with scopes, HMAC-signed webhooks with retries, watch folders, MCP server.</td></tr>
+      <tr><td class="m">api</td><td><code>server.py</code>, <code>video_routes.py</code>, <code>public_routes.py</code></td><td>Desktop routes (token-protected, loopback only) and the public <code>/v1</code> job API mounted by <code>aieditor serve</code>.</td></tr>
+      <tr><td class="m">licence.py</td><td>one file</td><td>Pure-Python Ed25519 check of <code>AIE1-…</code> keys, 14-day trial, free-tier limits.</td></tr>
+      <tr><td class="m">cli.py</td><td>one file</td><td>The <code>aieditor</code> command: serve, one-shot recipes, watch, keys, licence, mcp.</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section id="model">
+  <p class="eyebrow">03 · Data</p>
+  <h2>Project data model</h2>
+  <div class="plain"><b>In plain words:</b> a project is a list of media files, some tracks with clips on them, captions on top,
+  and one colour grade for the whole video. A clip never copies the media; it points at it with in/out times.</div>
+  <div class="diagram"><pre class="mermaid">
+classDiagram
+  class Project {
+    name
+    settings: ProjectSettings
+    media: map id to MediaItem
+    tracks: Track[]
+    captions: Caption[]
+    grade: EditOp[]
+    duration()
+    content_end()
+  }
+  class ProjectSettings {
+    width, height, fps
+    letterbox, fade_in, fade_out
+    progress_bar: off|top|bottom
+    end_card, end_card_seconds
+  }
+  class MediaItem { path, kind, width, height, duration, proxy_path }
+  class Track { kind: video|overlay|audio; hidden; clips }
+  class Clip {
+    media_id, start, in_point, out_point, speed
+    volume, fades, transition, motion
+    transform x y scale rotation, opacity, blend
+    keyframes: param to Keyframe[]
+  }
+  class Caption {
+    start, end, text, style
+    position, auto_position
+    words: start time per word
+    kind: caption|title
+  }
+  class EditOp { op, params }
+  Project --> ProjectSettings
+  Project --> "*" MediaItem
+  Project --> "*" Track
+  Track --> "*" Clip
+  Clip ..> MediaItem : media_id
+  Project --> "*" Caption
+  Project --> "*" EditOp : grade
+  </pre></div>
+</section>
+
+<section id="prompt">
+  <p class="eyebrow">04 · Flow</p>
+  <h2>Editing from a prompt (desktop app)</h2>
+  <div class="plain"><b>In plain words:</b> you type what you want and pick a style and an output. The AI writes three small "edit programs"
+  (Edit DSL). You preview them, pick one, and it becomes a single undo step. The AI never edits your project directly.</div>
+  <div class="diagram"><pre class="mermaid">
+sequenceDiagram
+  actor U as You
+  participant UI as Desktop UI
+  participant API as Engine API
+  participant P as video_planner
+  participant L as Local LLM
+  participant B as CommandBus
+  participant R as Renderer
+  U->>UI: "fun travel recap" + style travel + TikTok
+  UI->>API: POST /ai/video (prompt, style, output)
+  API->>P: options pre-fill hints (aspect, pace, looks, captions)
+  P->>L: grammar-constrained request
+  L-->>P: Edit DSL text
+  P-->>API: 3 variations (program + rationale)
+  API-->>UI: variations
+  U->>UI: preview, pick one
+  UI->>API: POST /commands/video.apply_program
+  API->>B: execute (one undo step)
+  B-->>UI: websocket event, new revision
+  UI->>API: GET preview frames
+  API->>R: render_frame(project, t)
+  R-->>UI: JPEG
+  </pre></div>
+</section>
+
+<section id="reels">
+  <p class="eyebrow">05 · Flow</p>
+  <h2>One long video in, reels out</h2>
+  <div class="plain"><b>In plain words:</b> the engine listens to the video (whisper), finds the strongest moments, cuts out pauses and "um"s,
+  follows the speaker so a wide shot becomes a vertical one, adds captions that light up word by word, and renders each reel.</div>
+  <div class="diagram"><pre class="mermaid">
+flowchart TD
+  A["Input video"] --> B["Import + probe<br/>session.import_media"]
+  B --> C["Analysis (cached by file)<br/>scenes, loudness, motion, faces"]
+  B --> D["Transcript<br/>whisper.cpp, word timings"]
+  C & D --> E["highlights.find_moments<br/>LLM scores hooks + audio/visual peaks"]
+  E --> F["cleanup.keep_ranges<br/>drop silences and filler words"]
+  F --> G["reframe.subject_track<br/>camera path for 9:16"]
+  G --> H["reels.reel_program<br/>Edit DSL per moment"]
+  H --> I["vdsl.apply_video_program<br/>clips, look, captions, progress_bar, end_card"]
+  I --> J["export_video"]
+  J --> K["reel_1.mp4 ... + reels.json"]
+  style E stroke-width:2px
+  </pre></div>
+  <div class="grid2">
+    <div class="card"><h3>Example program</h3><p><code>aspect 9:16 · clip 1 27.72-39.80 x=0:0.42,8:0.19 · look vivid_pop s=0.75 · captions bold_pop · progress_bar top · end_card "Follow for part 2"</code></p></div>
+    <div class="card"><h3>Why a program?</h3><p>The same text is previewable, editable by hand, replayable, and is exactly what the future EditLM model will learn to write.</p></div>
+  </div>
+</section>
+
+<section id="render">
+  <p class="eyebrow">06 · Pipeline</p>
+  <h2>How one frame is rendered</h2>
+  <div class="plain"><b>In plain words:</b> for every output frame, layers are stacked bottom to top, the colour look is applied,
+  fades and letterbox are added, then text goes on last so it stays sharp. Export splits the video into segments and renders them on several CPU threads.</div>
+  <div class="diagram"><pre class="mermaid">
+flowchart LR
+  T["time t"] --> CE{"t past content_end<br/>and end card set?"}
+  CE -- yes --> EC["End card<br/>last frame blurred + darkened + text"]
+  CE -- no --> L1["for each track bottom to top"]
+  L1 --> L2["decode frame<br/>(proxy in preview)"]
+  L2 --> L3["transform, keyframes,<br/>transition, opacity"]
+  L3 --> L4["blend: normal / add /<br/>screen / multiply / overlay"]
+  L4 --> G["grade<br/>256-cube LUT + grain"]
+  G --> F["fade in/out, letterbox"]
+  F --> C["captions<br/>text.draw_text, word highlight"]
+  C --> P["progress bar"]
+  P --> O["uint8 RGB frame"]
+  EC --> O
+  </pre></div>
+</section>
+
+<section id="captions">
+  <p class="eyebrow">07 · Algorithm</p>
+  <h2>Caption placement</h2>
+  <div class="plain"><b>In plain words:</b> before export, the engine looks at a few frames under each caption, finds faces and any text already
+  burned into the video (like a name title), and moves the caption to the spot that covers the least. Captions you placed by hand never move.</div>
+  <div class="diagram"><pre class="mermaid">
+flowchart TD
+  S["export_video starts"] --> CP["copy the project<br/>(your undo history is untouched)"]
+  CP --> LOOP["for each caption on Auto"]
+  LOOP --> SAMP["render 1-4 frames under it<br/>at 640 px, captions off"]
+  SAMP --> FACE["faces: YuNet if installed,<br/>else head cut from skin regions"]
+  SAMP --> TXT["burned-in text: thin bright/dark strokes<br/>in wide short bands"]
+  FACE & TXT --> COST["cost per position =<br/>3 x face overlap + 2 x text overlap<br/>+ 0.12 per step from style's spot<br/>+ 0.08 to change from last caption"]
+  COST --> PICK["pick the cheapest:<br/>center_low / bottom / high (9:16)<br/>bottom / lower_third / top (16:9)"]
+  PICK --> LOOP
+  </pre></div>
+</section>
+
+<section id="jobs">
+  <p class="eyebrow">08 · State machine</p>
+  <h2>Automation jobs and webhooks</h2>
+  <div class="plain"><b>In plain words:</b> n8n uploads a file, asks for a job, and either waits or gets a signed message when it is done.
+  Jobs are saved to disk, so a restart does not lose the queue.</div>
+  <div class="diagram"><pre class="mermaid">
+stateDiagram-v2
+  [*] --> queued: POST /v1/jobs (202)
+  queued --> running: worker picks it
+  queued --> cancelled: cancel
+  running --> done: outputs written
+  running --> failed: recipe error
+  running --> cancelled: cancel (stops at next checkpoint, stage "Cancelling")
+  running --> failed: engine restarted (interrupted)
+  done --> [*]: webhook job.done, files kept 7 days
+  failed --> [*]: webhook job.failed
+  cancelled --> [*]: webhook job.cancelled
+  </pre></div>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Piece</th><th>How it works</th></tr></thead>
+    <tbody>
+      <tr><td class="m">Upload</td><td><code>PUT /v1/files?name=talk.mp4</code> with the raw body, returns <code>f_…</code>. Inputs can also be URLs or (scope <code>local</code>) paths.</td></tr>
+      <tr><td class="m">Wait</td><td><code>GET /v1/jobs/{id}/wait?timeout=120</code> long-polls; n8n loops on it.</td></tr>
+      <tr><td class="m">Webhook</td><td>Header <code>X-AIEditor-Signature: t=…,v1=HMAC_SHA256(secret, "t." + raw body)</code>; retried after 2, 10 and 30 s.</td></tr>
+      <tr><td class="m">Keys</td><td><code>aie_&lt;id&gt;_&lt;secret&gt;</code>, stored as SHA-256 only; scopes <code>jobs</code>, <code>local</code>, <code>admin</code>; a key sees only its own jobs.</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section id="licence">
+  <p class="eyebrow">09 · Business rules</p>
+  <h2>Free vs Pro, checked offline</h2>
+  <div class="plain"><b>In plain words:</b> a Pro key is a signed note. The engine has the public half of the key and can check the
+  signature without the internet. Only the seller's machine has the private half that makes keys.</div>
+  <div class="diagram"><pre class="mermaid">
+flowchart LR
+  SELL["Seller PC<br/>tools/licence_issuer.py<br/>private key in ~/.aieditor-issuer"] -- "AIE1-payload.signature" --> USER["Customer pastes key<br/>aieditor licence activate"]
+  USER --> STORE["licence.json"]
+  STORE --> CHECK{"Ed25519 verify<br/>with built-in public key"}
+  CHECK -- "valid, not expired" --> PRO["Pro / Studio"]
+  CHECK -- "no key, trial running" --> TRIAL["Trial (14 days, once)"]
+  CHECK -- "otherwise" --> FREE["Free"]
+  </pre></div>
+  <div class="grid2">
+    <div class="card"><h3><span class="tag free">FREE</span>Always</h3><p>Whole desktop editor. One-shot <code>aieditor</code> commands and MCP with limits: 1 reel per video, 1 photo per job, no webhooks.</p></div>
+    <div class="card"><h3><span class="tag pro">PRO</span>Unlocks</h3><p><code>aieditor serve</code> (the /v1 API for n8n), watch folders, batches, webhooks, up to 10 reels per video. Blocked calls answer HTTP 402 with how to start a trial.</p></div>
+  </div>
+</section>
+
+<section id="install">
+  <p class="eyebrow">10 · Packaging</p>
+  <h2>What the installer puts on your PC</h2>
+  <div class="plain"><b>In plain words:</b> one 105 MB installer, no admin rights. The app window is a small Rust program; the engine is one
+  frozen Python program it starts in the background. The same engine file is also the <code>aieditor</code> command.</div>
+  <div class="diagram"><pre class="mermaid">
+flowchart TD
+  SETUP["AIEditor_0.1.0_x64-setup.exe<br/>NSIS, per-user"] --> DIR["%LOCALAPPDATA%/AIEditor"]
+  DIR --> APP["aieditor.exe<br/>Tauri shell + React UI"]
+  DIR --> ENG["aieditor-engine.exe<br/>PyInstaller, ~3 s start"]
+  SETUP --> CMD["WindowsApps/aieditor.cmd<br/>already on PATH"]
+  APP -- "starts, reads ready line<br/>{port, token}" --> ENG
+  CMD -- "cli args" --> ENG
+  DIR --> DATA["models/, runtime/ (whisper), automation/, licence.json<br/>kept on uninstall"]
+  </pre></div>
+</section>
+
+<section id="security">
+  <p class="eyebrow">11 · Trust</p>
+  <h2>Security boundaries</h2>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Boundary</th><th>Rule</th></tr></thead>
+    <tbody>
+      <tr><td class="m">Desktop engine</td><td>Binds 127.0.0.1 only, on a random port, with a fresh token per launch that never touches disk.</td></tr>
+      <tr><td class="m">aieditor serve</td><td>Loopback by default; <code>--allow-lan</code> needed for a network address, with a warning. Never expose it to the internet directly.</td></tr>
+      <tr><td class="m">API keys</td><td>Hashed at rest, constant-time compare, scopes; paths on your disk need the <code>local</code> scope.</td></tr>
+      <tr><td class="m">Webhooks</td><td>HMAC-SHA256 over timestamp + raw body; receivers reject anything older than 5 minutes.</td></tr>
+      <tr><td class="m">Licence</td><td>Offline Ed25519 signature; the engine cannot make keys. Open-core: a determined user can patch Python, which is accepted.</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<footer>Generated from the code at commit d5c6ab8 (phases A1, C, D, R1 steps 1, 3 and 5). Next: A2 GPU compositor, B movie timeline, E kid mode, F VFX.</footer>
+</main>
+</div>

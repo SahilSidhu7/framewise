@@ -127,3 +127,9 @@ outside this repository.
 | POST | `/ai/styles/from_video` | "edit like this": measure a reference video and save it as a reusable style |
 
 Every command, from a person or the AI, is appended to `logs/trajectory.jsonl` in the project folder. That log is EditLM training data.
+
+## Website and architecture
+- `site/`: the public landing page, a static site on Cloudflare Pages (project `aieditor`, https://aieditor-1me.pages.dev).
+  Deploy with `npx wrangler pages deploy site --project-name aieditor --branch main`.
+- `docs/architecture.html`: low-level design tour (components, data model, flows, rendering, caption placement,
+  jobs, licensing, installer) with Mermaid diagrams.
