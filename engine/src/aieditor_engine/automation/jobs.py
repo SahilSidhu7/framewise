@@ -258,6 +258,9 @@ class JobManager:
             self._cancel[jid].set()
             if job["state"] == "queued":
                 self._finish(job, "cancelled")
+            else:  # a running job stops at its next checkpoint
+                job["stage"] = "Cancelling"
+                self._save(job)
         return self.get(jid)
 
     def delete(self, jid: str, owner: str | None = None) -> bool:

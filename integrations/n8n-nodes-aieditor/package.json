@@ -2,20 +2,36 @@
   "name": "n8n-nodes-aieditor",
   "version": "0.1.0",
   "description": "n8n nodes for AIEditor: make reels, find highlights, add captions and edit videos/photos with AI on your own computer.",
-  "keywords": ["n8n-community-node-package", "video", "reels", "captions", "highlights", "ai", "editing"],
+  "keywords": [
+    "n8n-community-node-package",
+    "video",
+    "reels",
+    "captions",
+    "highlights",
+    "ai",
+    "editing"
+  ],
   "license": "MIT",
   "main": "index.js",
-  "files": ["dist"],
+  "files": [
+    "dist"
+  ],
   "scripts": {
     "build": "tsc && node -e \"require('fs').cpSync('nodes/AIEditor/aieditor.svg','dist/nodes/AIEditor/aieditor.svg')\"",
-    "dev": "tsc --watch"
+    "dev": "tsc --watch",
+    "test:live": "node test/live.js"
   },
   "n8n": {
     "n8nNodesApiVersion": 1,
-    "credentials": ["dist/credentials/AIEditorApi.credentials.js"],
-    "nodes": ["dist/nodes/AIEditor/AIEditor.node.js"]
+    "credentials": [
+      "dist/credentials/AIEditorApi.credentials.js"
+    ],
+    "nodes": [
+      "dist/nodes/AIEditor/AIEditor.node.js"
+    ]
   },
   "devDependencies": {
+    "@types/node": "^22.20.5",
     "n8n-workflow": "^1.82.0",
     "typescript": "~5.6.0"
   },

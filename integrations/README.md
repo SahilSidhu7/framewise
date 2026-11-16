@@ -76,7 +76,9 @@ return [{ json: JSON.parse(raw.toString('utf8')) }];
   Highlights, Add Captions, Edit Video, Edit Photo, Render Program, Transcribe, Get Job, Cancel Job) that uploads
   binary data from the previous node, waits, and returns the results as binary `file_1..n`.
   Build: `npm install && npm run build`, then install the folder in n8n (Settings > Community nodes, or
-  `npm install <path>` inside `~/.n8n/custom`).
+  `npm install <path>` inside `~/.n8n/custom`). `npm run test:live -- http://127.0.0.1:8765 <key> <media dir>`
+  runs every operation of the built node against a running engine without n8n (the media dir needs
+  `food.jpg`, `portrait.jpg` and `interview.webm`).
 
 ## Command line
 
