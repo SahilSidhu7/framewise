@@ -369,6 +369,32 @@ def create_app(token: str | None = None, automation: JobManager | None = None) -
     def licence_deactivate() -> dict[str, Any]:
         return licence_store.deactivate()
 
+    # ----------------------------------------------------- onboarding / system
+    from ..system import AppSettings, benchmark, system_info
+
+    app_settings = AppSettings()
+
+    @app.get("/system", dependencies=secured)
+    def system() -> dict[str, Any]:
+        """Processor, memory, disk, hardware encoder and which AI parts are installed."""
+        return system_info()
+
+    @app.post("/system/benchmark", dependencies=secured)
+    def system_benchmark() -> dict[str, Any]:
+        """About one second of real export work; estimates a 30 s 1080p reel on this PC."""
+        return benchmark()
+
+    @app.get("/app/settings", dependencies=secured)
+    def get_app_settings() -> dict[str, Any]:
+        return app_settings.get()
+
+    @app.post("/app/settings", dependencies=secured)
+    def set_app_settings(body: dict[str, Any]) -> dict[str, Any]:
+        try:
+            return app_settings.update(body)
+        except ValueError as exc:
+            raise HTTPException(422, str(exc)) from exc
+
     video_routes.register(app, state.require, secured)
     if automation is not None:
         from . import public_routes

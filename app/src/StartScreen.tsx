@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { EngineClient, isTauri, type Project, type Snapshot } from "./engine";
+import { EngineClient, isTauri, type Focus, type LicenceStatus, type Project, type Snapshot } from "./engine";
+import { ProBadge } from "./ProPanel";
 
 async function pickFolder(): Promise<string | null> {
   if (!isTauri()) return null;
@@ -8,10 +9,26 @@ async function pickFolder(): Promise<string | null> {
   return typeof picked === "string" ? picked : null;
 }
 
-export function StartScreen({ client, onOpened }: { client: EngineClient; onOpened: (s: Snapshot) => void }) {
+interface Props {
+  client: EngineClient;
+  onOpened: (s: Snapshot) => void;
+  focus?: Focus | null;
+  licence?: LicenceStatus | null;
+  onOpenPro?: () => void;
+  onSetup?: () => void;
+}
+
+const HINT: Record<Focus, string> = {
+  videos: "Create a project, add your clips, then describe the video you want.",
+  reels: "Create a project, import a long video, then ask for reels.",
+  photos: "Create a photo project, add pictures, then describe the look you want.",
+  automation: "Automation runs from the aieditor command or aieditor serve. You can also edit here.",
+};
+
+export function StartScreen({ client, onOpened, focus, licence, onOpenPro, onSetup }: Props) {
   const [path, setPath] = useState("");
-  const [name, setName] = useState("My project");
-  const [kind, setKind] = useState<Project["kind"]>("video");
+  const [name, setName] = useState(focus === "reels" ? "My reels" : focus === "photos" ? "My photos" : "My project");
+  const [kind, setKind] = useState<Project["kind"]>(focus === "photos" ? "photo" : "video");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -35,8 +52,11 @@ export function StartScreen({ client, onOpened }: { client: EngineClient; onOpen
   return (
     <div className="center">
       <div className="card start">
-        <h1>AIEditor</h1>
-        <p className="muted">Create a project or open an existing one.</p>
+        <div className="row between">
+          <h1>AIEditor</h1>
+          {onOpenPro && <ProBadge status={licence ?? null} onClick={onOpenPro} />}
+        </div>
+        <p className="muted">{focus ? HINT[focus] : "Create a project or open an existing one."}</p>
 
         <label>
           Project folder
@@ -66,6 +86,11 @@ export function StartScreen({ client, onOpened }: { client: EngineClient; onOpen
         </div>
 
         {error && <p className="error">{error}</p>}
+        {onSetup && (
+          <button type="button" className="link small" onClick={onSetup}>
+            Run setup again
+          </button>
+        )}
 
         <div className="row end">
           <button disabled={busy || !path} onClick={() => act(() => client.openProject(path))}>

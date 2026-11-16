@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { EngineClient, type EngineEvent, type Snapshot } from "./engine";
+import { EngineClient, type AppSettings, type EngineEvent, type LicenceStatus, type Snapshot } from "./engine";
 import { StartScreen } from "./StartScreen";
 import { Editor } from "./Editor";
+import { Onboarding } from "./Onboarding";
+import { ProModal } from "./ProPanel";
 
 export default function App() {
   const [client, setClient] = useState<EngineClient | null>(null);
@@ -9,10 +11,20 @@ export default function App() {
   const [snapshot, setSnapshot] = useState<Snapshot | null>(null);
   const [proxyProgress, setProxyProgress] = useState<Record<string, number>>({});
   const refreshTimer = useRef<number | undefined>(undefined);
+  const [settings, setSettings] = useState<AppSettings | null>(null);
+  const [licence, setLicence] = useState<LicenceStatus | null>(null);
+  const [showPro, setShowPro] = useState(false);
 
   useEffect(() => {
     EngineClient.connect().then(setClient, (e) => setFatal(String(e.message ?? e)));
   }, []);
+
+  useEffect(() => {
+    if (!client) return;
+    // Older engines without these routes: skip onboarding rather than block the editor.
+    client.appSettings().then(setSettings, () => setSettings({ onboarded: true, focus: null }));
+    client.licence().then(setLicence, () => undefined);
+  }, [client]);
 
   const refresh = useCallback(() => {
     if (!client) return;
@@ -44,11 +56,47 @@ export default function App() {
       </div>
     );
   }
-  if (!client) {
+  if (!client || !settings) {
     return <div className="center muted">Starting engine…</div>;
   }
-  if (!snapshot) {
-    return <StartScreen client={client} onOpened={setSnapshot} />;
+  if (!settings.onboarded) {
+    return (
+      <Onboarding
+        client={client}
+        licence={licence}
+        onLicence={setLicence}
+        onDone={(focus) => setSettings({ onboarded: true, focus })}
+      />
+    );
   }
-  return <Editor client={client} snapshot={snapshot} proxyProgress={proxyProgress} />;
+
+  const pro = showPro && (
+    <ProModal client={client} status={licence} onChange={setLicence} onClose={() => setShowPro(false)} />
+  );
+  const reopenSetup = () => {
+    client.saveAppSettings({ onboarded: false }).catch(() => undefined);
+    setSettings({ ...settings, onboarded: false });
+  };
+
+  if (!snapshot) {
+    return (
+      <>
+        <StartScreen
+          client={client}
+          onOpened={setSnapshot}
+          focus={settings.focus}
+          licence={licence}
+          onOpenPro={() => setShowPro(true)}
+          onSetup={reopenSetup}
+        />
+        {pro}
+      </>
+    );
+  }
+  return (
+    <>
+      <Editor client={client} snapshot={snapshot} proxyProgress={proxyProgress} licence={licence} onOpenPro={() => setShowPro(true)} />
+      {pro}
+    </>
+  );
 }

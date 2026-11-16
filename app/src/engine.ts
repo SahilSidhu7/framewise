@@ -181,6 +181,43 @@ export interface EngineEvent {
   [key: string]: unknown;
 }
 
+export interface LicenceStatus {
+  tier: "free" | "trial" | "pro" | "studio";
+  pro: boolean;
+  licence: { id: string; plan: string; to: string; seats: number; issued: number; expires: number | null } | null;
+  trial_days_left: number | null;
+  problem: string | null;
+}
+
+export interface SystemInfo {
+  os: string;
+  cpu: string;
+  cores: number;
+  memory_gb: number | null;
+  disk_free_gb: number;
+  hardware_encoder: "nvenc" | null;
+  ai: {
+    editing_model: { ready: boolean; name: string | null };
+    speech: { ready: boolean; name: string | null };
+    face_model: { ready: boolean };
+  };
+  data_folder: string;
+}
+
+export interface Benchmark {
+  ms_per_frame: number;
+  workers: number;
+  reel_seconds: number;
+  tier: "fast" | "good" | "basic";
+  summary: string;
+}
+
+export type Focus = "photos" | "videos" | "reels" | "automation";
+export interface AppSettings {
+  onboarded: boolean;
+  focus: Focus | null;
+}
+
 interface EngineInfo {
   port: number;
   token: string;
@@ -231,7 +268,7 @@ export class EngineClient {
     return `${this.base}${path}?token=${encodeURIComponent(this.token)}${rev}`;
   }
 
-  async request<T>(method: "GET" | "POST", path: string, body?: unknown): Promise<T> {
+  async request<T>(method: "GET" | "POST" | "DELETE", path: string, body?: unknown): Promise<T> {
     const res = await fetch(this.base + path, {
       method,
       headers: { "X-Engine-Token": this.token, ...(body ? { "Content-Type": "application/json" } : {}) },
@@ -286,6 +323,16 @@ export class EngineClient {
     if (!res.ok) throw new EngineError(res.status, await res.text());
     return URL.createObjectURL(await res.blob());
   }
+
+  // ---- onboarding, licence
+  appSettings = () => this.request<AppSettings>("GET", "/app/settings");
+  saveAppSettings = (changes: Partial<AppSettings>) => this.request<AppSettings>("POST", "/app/settings", changes);
+  system = () => this.request<SystemInfo>("GET", "/system");
+  benchmark = () => this.request<Benchmark>("POST", "/system/benchmark");
+  licence = () => this.request<LicenceStatus>("GET", "/licence");
+  activateLicence = (key: string) => this.request<LicenceStatus>("POST", "/licence/activate", { key });
+  startTrial = () => this.request<LicenceStatus>("POST", "/licence/trial");
+  deactivateLicence = () => this.request<LicenceStatus>("DELETE", "/licence");
 
   aiStatus = () => this.request<AiStatus>("GET", "/ai/status");
   aiWarmup = () => this.request<AiStatus>("POST", "/ai/warmup");
