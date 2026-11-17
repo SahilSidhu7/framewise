@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { clipDuration, EngineClient, isTauri, projectDuration, type Caption, type Clip, type EngineEvent, type LookInfo, type Snapshot, type Track, type VideoVariation, type AiOptions, type OutputOptions } from "./engine";
 
+import { pointOnImage } from "./Subject";
+
 type Tab = "ai" | "clip" | "look" | "text" | "export";
 type RunFn = (name: string, params: Record<string, unknown>) => Promise<Record<string, unknown> | undefined>;
 
@@ -54,6 +56,8 @@ export function VideoEditor({ client, snapshot, onNotice }: Props) {
   const [exportJob, setExportJob] = useState<string | null>(null);
   const [captionJob, setCaptionJob] = useState<string | null>(null);
   const [frameLoading, setFrameLoading] = useState(false);
+  const [picking, setPicking] = useState(false);
+  const pickImg = useRef<HTMLImageElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const wantPlay = useRef(false);
 
@@ -213,6 +217,7 @@ export function VideoEditor({ client, snapshot, onNotice }: Props) {
       else if (e.key === "ArrowLeft") seek(playhead - (e.shiftKey ? 1 : 1 / fps));
       else if (e.key === "Home") seek(0);
       else if (e.key === "End") seek(duration);
+      else if (e.key === "Escape") setPicking(false);
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -222,6 +227,37 @@ export function VideoEditor({ client, snapshot, onNotice }: Props) {
   useEffect(() => setFrameLoading(true), [frameSrc]);
 
   const empty = project.tracks.every((t) => t.clips.length === 0);
+
+  // picking a subject: show the selected clip's original frame (not the cropped/moved result) and take a click on it
+  const pickClip = selected && selected.track.kind !== "audio" && project.media[selected.clip.media_id]?.kind === "video" ? selected : undefined;
+  const pickTime = pickClip
+    ? Math.min(pickClip.clip.out_point, Math.max(pickClip.clip.in_point, pickClip.clip.in_point + (playhead - pickClip.clip.start) * pickClip.clip.speed))
+    : 0;
+  const startPick = () => {
+    if (!pickClip) return onNotice("Select a video clip first.");
+    const { clip } = pickClip;
+    if (playhead < clip.start || playhead > clip.start + clipDuration(clip)) seek(clip.start + Math.min(0.5, clipDuration(clip) / 2));
+    setPlaying(false);
+    setPicking(true);
+  };
+  const finishPick = async (e: React.MouseEvent<HTMLImageElement>) => {
+    if (!pickClip || !pickImg.current) return;
+    const pt = pointOnImage(pickImg.current, e.clientX, e.clientY);
+    if (!pt) return;
+    setPicking(false);
+    try {
+      onNotice("Following the subject through the clip…");
+      await client.pickSubject(pickClip.clip.media_id, pt.x, pt.y, pickTime);
+      try {
+        const r = await client.followSubject(pickClip.clip.id);
+        onNotice(`Subject picked. The clip now follows it (${r.keys} camera moves).`);
+      } catch (err) {
+        onNotice(`Subject picked. ${err instanceof Error ? err.message : String(err)}`);
+      }
+    } catch (err) {
+      onNotice(err instanceof Error ? err.message : String(err));
+    }
+  };
 
   return (
     <div className="video">
@@ -235,7 +271,17 @@ export function VideoEditor({ client, snapshot, onNotice }: Props) {
               </div>
             ) : (
               <>
-                {frameSrc && (
+                {picking && pickClip && (
+                  <img
+                    ref={pickImg}
+                    className="pick-frame"
+                    src={client.mediaFrameUrl(pickClip.clip.media_id, pickTime, 1280)}
+                    alt="Original frame: click the subject"
+                    onClick={finishPick}
+                  />
+                )}
+                {picking && <div className="pick-hint">Click the subject · Esc to cancel</div>}
+                {frameSrc && !picking && (
                   <img
                     className={`${playing ? "hidden" : ""} ${frameLoading ? "loading" : ""}`}
                     src={frameSrc}
@@ -286,7 +332,7 @@ export function VideoEditor({ client, snapshot, onNotice }: Props) {
           </nav>
           <div className="panel-body">
             {tab === "ai" && <VideoAi client={client} snapshot={snapshot} onNotice={onNotice} />}
-            {tab === "clip" && (selected ? <ClipPanel client={client} snapshot={snapshot} entry={selected} run={run} onSplit={split} onDelete={removeSelected} /> : <p className="muted small">Select a clip on the timeline.</p>)}
+            {tab === "clip" && (selected ? <ClipPanel client={client} snapshot={snapshot} entry={selected} run={run} onSplit={split} onDelete={removeSelected} onPickSubject={startPick} picking={picking} onNotice={onNotice} /> : <p className="muted small">Select a clip on the timeline.</p>)}
             {tab === "look" && <LookPanel client={client} snapshot={snapshot} playhead={playhead} run={run} />}
             {tab === "text" && (
               <TextPanel
@@ -760,7 +806,7 @@ function NumberSlider({ label: text, value, min, max, step, onCommit, fmt: f }: 
   );
 }
 
-function ClipPanel({ client, snapshot, entry, run, onSplit, onDelete }: { client: EngineClient; snapshot: Snapshot; entry: { track: Track; clip: Clip }; run: RunFn; onSplit: () => void; onDelete: () => void }) {
+function ClipPanel({ client, snapshot, entry, run, onSplit, onDelete, onPickSubject, picking, onNotice }: { client: EngineClient; snapshot: Snapshot; entry: { track: Track; clip: Clip }; run: RunFn; onSplit: () => void; onDelete: () => void; onPickSubject: () => void; picking: boolean; onNotice: (m: string | null) => void }) {
   const { clip, track } = entry;
   const media = snapshot.project.media[clip.media_id];
   const [looks, setLooks] = useState<LookInfo[]>([]);
@@ -824,6 +870,33 @@ function ClipPanel({ client, snapshot, entry, run, onSplit, onDelete }: { client
               <option value="fit">Show everything (bars)</option>
             </select>
           </div>
+          {media?.kind === "video" && (
+            <div className="group">
+              <h4>Subject</h4>
+              <p className="muted small">
+                {media.subject ? `Picked by you at ${media.subject.t.toFixed(1)}s of the video.` : "Found automatically (the main person or moving thing)."}{" "}
+                Reels and vertical framing keep it in view.
+              </p>
+              <div className="row">
+                <button className={picking ? "active" : ""} onClick={onPickSubject}>{picking ? "Click it in the viewer…" : "Pick in viewer"}</button>
+                <button
+                  onClick={async () => {
+                    try {
+                      const r = await client.followSubject(clip.id);
+                      onNotice(`This clip now follows the subject (${r.keys} camera moves).`);
+                    } catch (e) {
+                      onNotice(e instanceof Error ? e.message : String(e));
+                    }
+                  }}
+                >
+                  Follow subject
+                </button>
+                <button disabled={!media.subject} onClick={() => client.clearSubject(media.id).catch((e) => onNotice(String(e)))}>
+                  Automatic
+                </button>
+              </div>
+            </div>
+          )}
           <div className="group">
             <h4>Look for this clip only</h4>
             <select value={clipLook ? String(clipLook.params.name) : ""} onChange={(e) => run("clip.apply_look", { clip_id: clip.id, name: e.target.value || null })}>

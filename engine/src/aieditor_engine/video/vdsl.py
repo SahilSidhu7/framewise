@@ -371,6 +371,8 @@ def apply_video_program(
                 raise VideoDslError(str(exc)) from None
             if OPS[op_name].geometry:
                 raise VideoDslError(f"`{op_name}` is a photo crop/rotate; use `aspect` for videos")
+            if OPS[op_name].category == "subject":
+                raise VideoDslError("`subject` edits are for photos; in a video, pick the subject in the viewer and use Follow subject")
             ops.append(EditOp(id=new_id("op"), op=op_name, params=params))
         if replace:
             p.grade = ops

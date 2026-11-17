@@ -16,6 +16,18 @@ export interface MediaItem {
   thumb_path: string | null;
   proxy_path: string | null;
   proxy_status: ProxyStatus;
+  subject?: { x: number; y: number; t: number } | null;
+}
+
+export interface SubjectInfo {
+  kind: "photo" | "video";
+  point?: string;
+  outline?: number[][][];
+  box?: number[] | null;
+  coverage?: number;
+  pick?: { x: number; y: number; t: number } | null;
+  method?: string | null;
+  track?: [number, number[]][];
 }
 
 export type TransitionKind = "crossfade" | "fade_black" | "fade_white" | "wipe_left" | "wipe_right" | "slide_left" | "slide_up" | "zoom" | "blur";
@@ -333,6 +345,16 @@ export class EngineClient {
   activateLicence = (key: string) => this.request<LicenceStatus>("POST", "/licence/activate", { key });
   startTrial = () => this.request<LicenceStatus>("POST", "/licence/trial");
   deactivateLicence = () => this.request<LicenceStatus>("DELETE", "/licence");
+
+  // ---- subject selection
+  subject = (mediaId: string, point = "auto", t?: number) =>
+    this.request<SubjectInfo>("GET", `/media/${mediaId}/subject?point=${encodeURIComponent(point)}${t !== undefined ? `&t=${t.toFixed(3)}` : ""}`);
+  pickSubject = (mediaId: string, x: number, y: number, t = 0) => this.request<SubjectInfo>("POST", `/media/${mediaId}/subject`, { x, y, t });
+  clearSubject = (mediaId: string) => this.request<{ pick: null }>("DELETE", `/media/${mediaId}/subject`);
+  followSubject = (clipId: string) => this.request<{ keys: number; method: string }>("POST", `/clips/${clipId}/follow_subject`);
+  mediaFrameUrl(mediaId: string, t: number, max = 960): string {
+    return `${this.base}/media/${mediaId}/frame?token=${encodeURIComponent(this.token)}&t=${t.toFixed(3)}&max=${max}`;
+  }
 
   aiStatus = () => this.request<AiStatus>("GET", "/ai/status");
   aiWarmup = () => this.request<AiStatus>("POST", "/ai/warmup");

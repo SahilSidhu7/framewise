@@ -427,6 +427,14 @@ EXTRA_OPS = [
     (r"\b(dehaze|haze|hazy|foggy)\b", "dehaze amount=30"),
     (r"\b(denoise|noisy|noise)\b", "denoise strength=40"),
     (r"\b(light leak|leak)\b", "light_leak amount=0.3"),
+    # subject-aware edits (the subject is found automatically; a picked point is kept by the editor)
+    (r"\b(blur(red)? (the )?background|background blur|portrait mode|bokeh|shallow depth)\b", "subject bg_blur=22"),
+    (r"\b(make (the )?(subject|person|product|food) (pop|stand out)|focus on (the )?(subject|person|product)|isolate (the )?subject)\b",
+     "subject light=0.25 bg_light=-0.45 bg_saturation=-25"),
+    (r"\b(colou?r splash|background (black and white|b&w|grey|gray)|(black and white|b&w|desaturate) (the )?background)\b",
+     "subject bg_saturation=-100"),
+    (r"\b(darken|dim) (the )?background\b", "subject bg_light=-0.8"),
+    (r"\b(brighten|lighten) (the )?(subject|person|face)\b", "subject light=0.35"),
 ]
 FIX_WORDS = r"\b(fix|enhance|improve|auto|better|correct|repair|clean up|make it good|nice)\b"
 NEGATION = re.compile(r"\b(less|no|without|remove|reduce|fewer|lower|not|don't|dont)\b")
@@ -499,6 +507,8 @@ def plan_rules(prompt: str, analysis: dict[str, Any], current_program: str = "",
     crop = next((f"crop aspect={a}" for pattern, a in ASPECTS if re.search(pattern, text)), None)
 
     looks = _match_looks(text)
+    if any("bg_saturation=-100" in e for e in extras):  # colour splash: "black and white" means the background only
+        looks = [name for name in looks if not name.startswith(("bw_", "noir"))]
     current_look = re.search(r"look (\w+)(?: s=([\d.]+))?", current_program)
     if not looks and current_look and not adjust and not extras and not crop:
         # refinement like "more" / "less" on the existing look

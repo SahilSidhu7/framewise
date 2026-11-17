@@ -20,6 +20,7 @@ from .project import (
     ProxyStatus,
     Track,
     new_id,
+    SubjectPick,
 )
 
 # ------------------------------------------------------------------ project
@@ -100,6 +101,24 @@ def media_remove(p: Project, a: MediaRemoveParams) -> dict:
         track.clips = [c for c in track.clips if c.media_id != a.media_id]
         removed += before - len(track.clips)
     return {"clips_removed": removed}
+
+
+class MediaSubjectParams(BaseModel):
+    media_id: str
+    x: float | None = Field(None, ge=0, le=1, description="Subject position (0..1 of width); omit both x and y for automatic")
+    y: float | None = Field(None, ge=0, le=1)
+    t: float = Field(0.0, ge=0, description="Video: the time the click was made")
+
+
+@command("media.set_subject", MediaSubjectParams, "Choose the subject of a video or photo by its position, or go back to automatic.", "media")
+def media_set_subject(p: Project, a: MediaSubjectParams) -> dict:
+    item = p.media.get(a.media_id)
+    if item is None:
+        raise CommandError(f"media not found: {a.media_id}")
+    if (a.x is None) != (a.y is None):
+        raise CommandError("give both x and y, or neither for automatic")
+    item.subject = None if a.x is None else SubjectPick(x=a.x, y=a.y, t=a.t)  # type: ignore[arg-type]
+    return {"subject": item.subject.model_dump() if item.subject else None}
 
 
 # ----------------------------------------------------------------- timeline

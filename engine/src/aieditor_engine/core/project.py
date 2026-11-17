@@ -44,6 +44,14 @@ class ProxyStatus(StrEnum):
     FAILED = "failed"
 
 
+class SubjectPick(BaseModel):
+    """The subject a person clicked on: position (0..1 of width/height) and, for video, the time."""
+
+    x: float = Field(ge=0, le=1)
+    y: float = Field(ge=0, le=1)
+    t: float = Field(0.0, ge=0)
+
+
 class MediaItem(BaseModel):
     id: str
     name: str
@@ -57,6 +65,7 @@ class MediaItem(BaseModel):
     thumb_path: str | None = None  # relative to project dir
     proxy_path: str | None = None  # relative to project dir
     proxy_status: ProxyStatus = ProxyStatus.NONE
+    subject: SubjectPick | None = Field(None, description="Chosen subject (video: followed through the clip); None = automatic")
 
 
 class EditOp(BaseModel):

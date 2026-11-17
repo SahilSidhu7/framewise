@@ -171,6 +171,12 @@ class Session:
         if item is None or item.kind != MediaKind.VIDEO:
             return None
         with self._video_lock:
+            if item.subject is not None:  # picked by hand: follow that subject
+                from .video.track import track_subject
+
+                pick = item.subject
+                kind = f"subject_pick_{pick.x:.3f}_{pick.y:.3f}_{pick.t:.2f}".replace(".", "")
+                return self._cached(kind, media_id, lambda path: track_subject(path, pick.t, pick.x, pick.y))
             return self._cached("subjects", media_id, subject_track)
 
     @property

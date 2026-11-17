@@ -415,6 +415,52 @@ def blur(img: np.ndarray, p: BlurParams, ctx: RenderContext) -> np.ndarray:
     return _gauss(img, ctx.px(img, p.radius))
 
 
+class SubjectParams(BaseModel):
+    point: str = Field("auto", description='"auto", or the subject\'s position as "x,y" (0..1 of width, height)')
+    light: float = Field(0.0, ge=-2, le=2, description="Subject exposure in stops")
+    bg_light: float = Field(0.0, ge=-3, le=1, description="Background exposure in stops")
+    bg_blur: float = Field(0.0, ge=0, le=100, description="Background blur, relative px (portrait-mode look)")
+    bg_saturation: float = Field(0.0, ge=-100, le=50, description="Background saturation change")
+    feather: float = Field(0.5, ge=0, le=1, description="Softness of the subject edge")
+
+    @field_validator("point")
+    @classmethod
+    def _point(cls, v: str) -> str:
+        from .subject import parse_point
+
+        try:
+            pt = parse_point(v)
+        except ValueError as exc:
+            raise ValueError('point must be "auto" or "x,y" with values 0..1') from exc
+        return "auto" if pt is None else f"{pt[0]:.3f},{pt[1]:.3f}"
+
+
+@op("subject", SubjectParams, "linear", "Find the main subject (auto, or at a point) and light it, or blur, darken or desaturate everything behind it.", "subject", ("point",))
+def subject(img: np.ndarray, p: SubjectParams, ctx: RenderContext) -> np.ndarray:
+    from .subject import parse_point, subject_mask
+
+    if not (p.light or p.bg_light or p.bg_blur or p.bg_saturation):
+        return img
+    display = (np.clip(linear_to_srgb(np.clip(img, 0, 1)), 0, 1) * 255).astype(np.uint8)
+    m = subject_mask(display, parse_point(p.point), p.feather)[..., None]
+    bg = 1.0 - m
+    out = img
+    if p.bg_blur > 0:
+        # blur only the background, normalised by its own weight so the subject's colours don't bleed into it
+        sigma = ctx.px(img, p.bg_blur)
+        num = _gauss(img * bg, sigma)
+        den = _gauss(np.repeat(bg, 3, axis=2), sigma)
+        blurred = np.where(den > 1e-3, num / np.maximum(den, 1e-3), img)
+        out = out * m + blurred * bg
+    if p.bg_saturation:
+        lum = (out * np.asarray(LUMA, np.float32)).sum(axis=2, keepdims=True)
+        k = 1.0 + p.bg_saturation / 100.0
+        out = out * m + (lum + (out - lum) * k) * bg
+    if p.light or p.bg_light:
+        out = out * (m * (2.0 ** p.light) + bg * (2.0 ** p.bg_light))
+    return out.astype(np.float32)
+
+
 # ---------------------------------------------------------------- effects
 
 

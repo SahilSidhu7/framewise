@@ -396,6 +396,9 @@ def create_app(token: str | None = None, automation: JobManager | None = None) -
             raise HTTPException(422, str(exc)) from exc
 
     video_routes.register(app, state.require, secured)
+    from . import subject_routes
+
+    subject_routes.register(app, state.require, secured)
     if automation is not None:
         from . import public_routes
 

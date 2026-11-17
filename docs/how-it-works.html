@@ -231,6 +231,16 @@ fin       ::= ("grain 0." [0-3] [0-9] | "vignette 0." [1-4] | "bloom 0." [1-3])<
     <li><div><b>Picture.</b> Motion and visual change per second.</div></li>
   </ol>
   <p>The best windows that do not overlap become the reels. Then pauses and filler words ("um", "you know") are cut using word timings, the speaker is tracked so a wide 16:9 shot becomes a well-framed 9:16 one, and captions, a progress bar and an optional end card are added.</p>
+  <h3>Choosing the subject</h3>
+  <p>Every photo and video has a <b>subject</b>: found automatically, or picked with one click.</p>
+  <ol class="steps">
+    <li><div><b>Automatic.</b> A map of what usually makes a subject (in focus, different in colour from the edges of the frame, near a face, near the centre) seeds OpenCV's GrabCut, which then follows the real colour edges to cut the subject out.</div></li>
+    <li><div><b>Picked by hand.</b> In a photo, "Pick on photo" and a click; in a video, "Pick in viewer" shows the clip's original frame and you click the person or thing. The click becomes the seed for the same cut-out.</div></li>
+    <li><div><b>Photos:</b> the subject edit lights the subject or blurs, darkens or desaturates everything behind it (portrait mode, colour splash). Auto edit understands "blur the background", "make the product pop" and "colour splash".</div></li>
+    <li><div><b>Videos:</b> from the click, feature points on the subject are followed frame by frame with optical flow, forwards and backwards through the whole clip. "Follow subject" then moves the picture so the subject stays centred, which is what makes 16:9 footage work as a 9:16 reel. Reels use the picked subject automatically.</div></li>
+  </ol>
+  <p>None of this needs a download. A dedicated segmentation model (for example BiRefNet or SAM2) can later replace GrabCut for hair-accurate edges.</p>
+
   <h3>Captions that stay out of the way</h3>
   <p>Captions are grouped from word timings (short chunks for bold reel captions), and the word being spoken is highlighted. Before export, the engine looks at a few frames under each caption, finds faces and any text already burned into the video (like a name title), and moves the caption to the spot that covers the least of them. Captions you placed by hand never move.</p>
 </section>

@@ -164,7 +164,7 @@ def clip_frame(project: Project, clip: Clip, t: float, w: int, h: int, src: Rend
         reader = READERS.get(path, size, src.channel) if size else reader_probe
         img = u8_to_linear(reader.frame_at(clip.source_time(t)))
     img, cover = _place(img, clip, t, w, h)
-    ops = [o.model_dump(mode="json") for o in clip.ops if not OPS[o.op].geometry]
+    ops = [o.model_dump(mode="json") for o in clip.ops if not OPS[o.op].geometry and OPS[o.op].category != "subject"]
     if ops:
         img = apply_stack(img, ops, make_context(seed))
     a = min(1.0, max(0.0, clip.value("opacity", t)))
@@ -315,7 +315,7 @@ def render_frame(
             canvas = _composite(canvas, *layer)
     if canvas is None:
         canvas = np.zeros((h, w, 3), dtype=np.float32)
-    grade = [o.model_dump(mode="json") for o in project.grade if not OPS[o.op].geometry]
+    grade = [o.model_dump(mode="json") for o in project.grade if not OPS[o.op].geometry and OPS[o.op].category != "subject"]
     frame = PLANS.get(grade).finish(canvas, seed)
     s = project.settings
     total = project.duration

@@ -10,6 +10,7 @@ import {
   type MediaItem,
   type Snapshot,
 } from "./engine";
+import { PhotoSubjectControls, SubjectOutline, pointOnImage, setPhotoSubject } from "./Subject";
 
 type Tab = "ai" | "looks" | "adjust" | "crop" | "edits";
 
@@ -24,6 +25,15 @@ interface SliderSpec {
 }
 
 const ADJUST_GROUPS: { title: string; sliders: SliderSpec[] }[] = [
+  {
+    title: "Subject",
+    sliders: [
+      { op: "subject", key: "light", label: "Subject light", min: -1, max: 1, step: 0.05 },
+      { op: "subject", key: "bg_light", label: "Background light", min: -2, max: 1, step: 0.05 },
+      { op: "subject", key: "bg_blur", label: "Background blur", min: 0, max: 60, step: 1 },
+      { op: "subject", key: "bg_saturation", label: "Background color", min: -100, max: 50, step: 1 },
+    ],
+  },
   {
     title: "Light",
     sliders: [
@@ -97,6 +107,7 @@ const OP_LABELS: Record<string, string> = {
   chromatic_aberration: "Lens fringing",
   light_leak: "Light leak",
   dust_scratches: "Dust & scratches",
+  subject: "Subject",
 };
 
 const DRAG_PREVIEW_MAX = 900;
@@ -120,6 +131,9 @@ export function PhotoEditor({ client, snapshot, item, onNotice }: Props) {
   const [compare, setCompare] = useState(false);
   const [loaded, setLoaded] = useState(false);
   const [showExport, setShowExport] = useState(false);
+  const [picking, setPicking] = useState(false);
+  const [aspect, setAspect] = useState(1.5);
+  const imgRef = useRef<HTMLImageElement>(null);
   const previewSeq = useRef(0);
   const timer = useRef<number | undefined>(undefined);
 
@@ -226,8 +240,31 @@ export function PhotoEditor({ client, snapshot, item, onNotice }: Props) {
             Export
           </button>
         </div>
-        <div className="photo-canvas">
-          <img src={shownUrl} alt={item.name} onLoad={() => setLoaded(true)} className={loaded || draftUrl ? "" : "loading"} />
+        <div
+          className={`photo-canvas ${picking ? "picking" : ""}`}
+          onClick={(e) => {
+            if (!picking || !imgRef.current) return;
+            const pt = pointOnImage(imgRef.current, e.clientX, e.clientY);
+            if (!pt) return;
+            setPicking(false);
+            void setPhotoSubject(item, stack, run, pt.x, pt.y);
+          }}
+        >
+          <img
+            ref={imgRef}
+            src={shownUrl}
+            alt={item.name}
+            onLoad={(e) => {
+              setLoaded(true);
+              const im = e.currentTarget;
+              if (im.naturalHeight) setAspect(im.naturalWidth / im.naturalHeight);
+            }}
+            className={loaded || draftUrl ? "" : "loading"}
+          />
+          {tab === "adjust" && (picking || stack.some((o) => o.op === "subject")) && !compare && (
+            <SubjectOutline client={client} item={item} point={String(stack.find((o) => o.op === "subject")?.params.point ?? "auto")} aspect={aspect} />
+          )}
+          {picking && <div className="pick-hint">Click the subject</div>}
           {!loaded && !draftUrl && <div className="spinner" />}
         </div>
       </div>
@@ -247,6 +284,7 @@ export function PhotoEditor({ client, snapshot, item, onNotice }: Props) {
             ADJUST_GROUPS.map((g) => (
               <section key={g.title} className="group">
                 <h4>{g.title}</h4>
+                {g.title === "Subject" && <PhotoSubjectControls item={item} stack={stack} picking={picking} setPicking={setPicking} run={run} />}
                 {g.sliders.map((s) => (
                   <Slider key={s.op + s.key} spec={s} value={valueOf(s)} onSlide={onSlide} onCommit={onCommit} onReset={resetSlider} />
                 ))}
