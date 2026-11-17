@@ -236,7 +236,7 @@ export function PhotoEditor({ client, snapshot, item, onNotice }: Props) {
         <nav className="tabs">
           {(["ai", "looks", "adjust", "crop", "edits"] as Tab[]).map((t) => (
             <button key={t} className={tab === t ? "active" : ""} onClick={() => setTab(t)}>
-              {t === "ai" ? "✨ AI" : t[0].toUpperCase() + t.slice(1)}
+              {t === "ai" ? "Auto edit" : t[0].toUpperCase() + t.slice(1)}
             </button>
           ))}
         </nav>
@@ -340,14 +340,14 @@ function AiPanel({ client, item, revision, run, onNotice }: { client: EngineClie
   };
 
   const modelLabel =
-    status?.state === "ready" ? `Local AI ready · ${status.model}` :
-    status?.state === "idle" ? "Local AI loading…" :
-    status?.state === "not_installed" ? "Basic AI (model not installed)" :
-    status?.state === "error" ? "Basic AI (model failed to start)" : "…";
+    status?.state === "ready" ? "On-device model ready" :
+    status?.state === "idle" ? "Loading model…" :
+    status?.state === "not_installed" ? "Rules only · model not installed" :
+    status?.state === "error" ? "Rules only · model failed to start" : "…";
 
   return (
     <div className="ai">
-      <p className="muted small">Describe the edit you want. You'll get 3 versions; the first is applied. Undo anytime.</p>
+      <p className="muted small">Describe the result you want. You get three versions; the first one is applied and Undo reverts it.</p>
       <textarea
         value={prompt}
         placeholder="e.g. make it look like an old film photo"
@@ -363,12 +363,13 @@ function AiPanel({ client, item, revision, run, onNotice }: { client: EngineClie
       <div className="row between">
         <span className={`small ${status?.state === "ready" ? "ok" : "muted"}`}>{modelLabel}</span>
         <button className="primary" disabled={busy || !prompt.trim()} onClick={() => ask(prompt)}>
-          {busy ? "Thinking…" : "Edit"}
+          {busy ? "Working…" : "Apply"}
         </button>
       </div>
-      <div className="chips">
-        {AI_CHIPS.map((c) => (
-          <button key={c} className="chip" disabled={busy} onClick={() => { setPrompt(c); void ask(c); }}>
+      <div className="examples">
+        <span className="label">Examples</span>
+        {AI_CHIPS.slice(0, 4).map((c) => (
+          <button key={c} type="button" className="example" disabled={busy} onClick={() => { setPrompt(c); void ask(c); }}>
             {c}
           </button>
         ))}
@@ -383,7 +384,7 @@ function AiPanel({ client, item, revision, run, onNotice }: { client: EngineClie
               <div className="variation-body">
                 <div className="row between">
                   <strong>Version {i + 1}</strong>
-                  <span className="muted small">{applied === i ? "applied" : v.source === "llm" ? "AI" : "preset"}</span>
+                  <span className="muted small">{applied === i ? "applied" : v.source === "llm" ? "model" : "preset"}</span>
                 </div>
                 {v.rationale && <p className="small">{v.rationale}</p>}
                 <details onClick={(e) => e.stopPropagation()}>
@@ -520,7 +521,7 @@ function CropPanel({ item, stack, run }: { item: MediaItem; stack: EditOp[]; run
 // ------------------------------------------------------------------- edits
 
 function EditsPanel({ item, stack, run }: { item: MediaItem; stack: EditOp[]; run: RunFn }) {
-  if (stack.length === 0) return <p className="muted small">No edits yet. Try the AI tab or a look.</p>;
+  if (stack.length === 0) return <p className="muted small">No edits yet. Start with Auto edit or a look.</p>;
   return (
     <div>
       <ul className="edit-list">

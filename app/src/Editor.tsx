@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { EngineClient, isTauri, type LicenceStatus, type MediaItem, type Snapshot } from "./engine";
 import { ProBadge } from "./ProPanel";
+import { Logo } from "./Shell";
 import { PhotoEditor } from "./PhotoEditor";
 import { VideoEditor } from "./VideoEditor";
 
@@ -70,9 +71,10 @@ export function Editor({ client, snapshot, proxyProgress, licence, onOpenPro }: 
   return (
     <div className={`editor ${photoMode || videoMode ? "photo-mode" : ""}`}>
       <header className="toolbar">
-        <strong>{project.name}</strong>
-        <span className="muted small">
-          {project.kind} · {project.settings.width}×{project.settings.height} @ {project.settings.fps} fps
+        <Logo size={20} word={false} />
+        <strong className="project-name">{project.name}</strong>
+        <span className="meta-mono">
+          {project.kind.toUpperCase()} · {project.settings.width}×{project.settings.height} · {project.settings.fps} FPS
         </span>
         <div className="spacer" />
         {onOpenPro && <ProBadge status={licence ?? null} onClick={onOpenPro} />}
@@ -93,7 +95,7 @@ export function Editor({ client, snapshot, proxyProgress, licence, onOpenPro }: 
       <aside className="bin">
         <div className="bin-head">
           <span>Media</span>
-          <button className="primary" onClick={importFiles}>
+          <button onClick={importFiles}>
             Import
           </button>
         </div>

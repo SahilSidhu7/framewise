@@ -231,7 +231,7 @@ export function VideoEditor({ client, snapshot, onNotice }: Props) {
             {empty ? (
               <div className="v-empty muted">
                 <p>Your timeline is empty.</p>
-                <p className="small">Import clips, then ask the AI (right) to edit them, or double-click media to add it yourself.</p>
+                <p className="small">Import clips, then describe the edit on the right, or double-click a clip to place it yourself.</p>
               </div>
             ) : (
               <>
@@ -280,7 +280,7 @@ export function VideoEditor({ client, snapshot, onNotice }: Props) {
           <nav className="tabs">
             {(["ai", "clip", "look", "text", "export"] as Tab[]).map((t) => (
               <button key={t} className={tab === t ? "active" : ""} onClick={() => setTab(t)}>
-                {{ ai: "AI", clip: "Clip", look: "Look", text: "Text", export: "Export" }[t]}
+                {{ ai: "Auto edit", clip: "Clip", look: "Color", text: "Text", export: "Export" }[t]}
               </button>
             ))}
           </nav>
@@ -555,7 +555,7 @@ function VideoAi({ client, snapshot, onNotice }: { client: EngineClient; snapsho
   const hasVideo = Object.values(snapshot.project.media).some((m) => m.kind === "video");
 
   useEffect(() => {
-    client.aiWarmup().then((s) => setStatus(s.state === "not_installed" ? "Basic AI (model not installed)" : "Local AI model"), () => undefined);
+    client.aiWarmup().then((s) => setStatus(s.state === "not_installed" ? "Rules only · model not installed" : "On-device model"), () => undefined);
     client.aiOptions().then(setOptions, () => undefined);
   }, [client]);
 
@@ -638,7 +638,7 @@ function VideoAi({ client, snapshot, onNotice }: { client: EngineClient; snapsho
   return (
     <div className="ai">
       <div className="row between">
-        <h4 style={{ margin: 0 }}>Ask the AI editor</h4>
+        <h4 style={{ margin: 0 }}>Describe the edit</h4>
         <span className="muted small">{status}</span>
       </div>
       <textarea
@@ -709,14 +709,15 @@ function VideoAi({ client, snapshot, onNotice }: { client: EngineClient; snapsho
           {busy ? "Editing…" : "Edit my video"}
         </button>
       </div>
-      <div className="chips">
-        {AI_CHIPS.map((c) => (
-          <button key={c} className="chip" disabled={busy || !hasMedia} onClick={() => { setPrompt(c); go(c); }}>
+      <div className="examples">
+        <span className="label">Examples</span>
+        {AI_CHIPS.slice(0, 4).map((c) => (
+          <button key={c} type="button" className="example" disabled={busy || !hasMedia} onClick={() => { setPrompt(c); go(c); }}>
             {c}
           </button>
         ))}
       </div>
-      {busy && <p className="muted small">Watching your clips and planning the edit…</p>}
+      {busy && <p className="muted small">Reviewing your clips and planning the edit…</p>}
       {vars.length > 0 && (
         <div className="variations">
           <h4>{heading}</h4>
@@ -735,7 +736,7 @@ function VideoAi({ client, snapshot, onNotice }: { client: EngineClient; snapsho
               </div>
             </div>
           ))}
-          <p className="muted small">Every AI edit is one Undo step.</p>
+          <p className="muted small">Each version is a single Undo step.</p>
         </div>
       )}
     </div>
@@ -971,7 +972,7 @@ function TextPanel(props: {
             <button onClick={() => run("caption.style_all", { style, kind: "caption" })}>Restyle all</button>
           )}
         </div>
-        {speech === false && <p className="muted small">Speech recognition isn't installed (whisper.cpp + a ggml model in the AI folder).</p>}
+        {speech === false && <p className="muted small">Speech recognition isn't installed yet, so captions can't be made automatically.</p>}
       </div>
       <div className="group">
         <h4>Titles & text</h4>

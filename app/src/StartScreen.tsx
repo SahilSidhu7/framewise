@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { EngineClient, isTauri, type Focus, type LicenceStatus, type Project, type Snapshot } from "./engine";
 import { ProBadge } from "./ProPanel";
+import { Shell } from "./Shell";
 
 async function pickFolder(): Promise<string | null> {
   if (!isTauri()) return null;
@@ -19,11 +20,17 @@ interface Props {
 }
 
 const HINT: Record<Focus, string> = {
-  videos: "Create a project, add your clips, then describe the video you want.",
-  reels: "Create a project, import a long video, then ask for reels.",
-  photos: "Create a photo project, add pictures, then describe the look you want.",
-  automation: "Automation runs from the aieditor command or aieditor serve. You can also edit here.",
+  videos: "Add your clips, then describe the video you want.",
+  reels: "Import a long video, then use Make reels.",
+  photos: "Add pictures, then describe the look you want.",
+  automation: "Automation runs from the aieditor command and aieditor serve. You can still edit here.",
 };
+
+const KINDS: { id: Project["kind"]; title: string; text: string }[] = [
+  { id: "video", title: "Video", text: "Clips, music, captions, reels" },
+  { id: "photo", title: "Photo", text: "Single photos and batches" },
+  { id: "collage", title: "Collage", text: "Several photos on one canvas" },
+];
 
 export function StartScreen({ client, onOpened, focus, licence, onOpenPro, onSetup }: Props) {
   const [path, setPath] = useState("");
@@ -50,57 +57,62 @@ export function StartScreen({ client, onOpened, focus, licence, onOpenPro, onSet
   };
 
   return (
-    <div className="center">
-      <div className="card start">
-        <div className="row between">
-          <h1>AIEditor</h1>
-          {onOpenPro && <ProBadge status={licence ?? null} onClick={onOpenPro} />}
+    <Shell
+      side={
+        <div className="side-stack">
+          {onOpenPro && (
+            <div className="side-block">
+              <span className="label">Plan</span>
+              <ProBadge status={licence ?? null} onClick={onOpenPro} />
+            </div>
+          )}
+          {onSetup && (
+            <button type="button" className="link" onClick={onSetup}>
+              Run setup again
+            </button>
+          )}
         </div>
-        <p className="muted">{focus ? HINT[focus] : "Create a project or open an existing one."}</p>
+      }
+      footer={
+        <>
+          <button disabled={busy || !path} onClick={() => act(() => client.openProject(path))}>
+            Open existing project
+          </button>
+          <button className="primary" disabled={busy || !path || !name} onClick={() => act(() => client.createProject(path, name, kind))}>
+            Create project
+          </button>
+        </>
+      }
+    >
+      <div className="ob-body">
+        <h1>New project</h1>
+        <p className="lead">{focus ? HINT[focus] : "Create a project, or open one you made before."}</p>
 
-        <label>
-          Project folder
+        <div className="kind-grid" role="radiogroup" aria-label="Project type">
+          {KINDS.map((k) => (
+            <button key={k.id} type="button" role="radio" aria-checked={kind === k.id} className={`focus ${kind === k.id ? "sel" : ""}`} onClick={() => setKind(k.id)}>
+              <strong>{k.title}</strong>
+              <span>{k.text}</span>
+            </button>
+          ))}
+        </div>
+
+        <div className="form-grid">
+          <label htmlFor="project-name">Name</label>
+          <input id="project-name" value={name} onChange={(e) => setName(e.target.value)} />
+          <label htmlFor="project-folder">Folder</label>
           <div className="row">
-            <input value={path} onChange={(e) => setPath(e.target.value)} placeholder="C:\Videos\Holiday" />
+            <input id="project-folder" value={path} onChange={(e) => setPath(e.target.value)} placeholder="C:\Videos\Holiday" />
             {isTauri() && (
               <button type="button" onClick={browse}>
                 Browse…
               </button>
             )}
           </div>
-        </label>
-
-        <div className="row">
-          <label className="grow">
-            Name
-            <input value={name} onChange={(e) => setName(e.target.value)} />
-          </label>
-          <label>
-            Type
-            <select value={kind} onChange={(e) => setKind(e.target.value as Project["kind"])}>
-              <option value="video">Video</option>
-              <option value="photo">Photo</option>
-              <option value="collage">Collage</option>
-            </select>
-          </label>
         </div>
-
+        <p className="muted small">The project folder holds the project file, previews and exports. Your original files stay where they are.</p>
         {error && <p className="error">{error}</p>}
-        {onSetup && (
-          <button type="button" className="link small" onClick={onSetup}>
-            Run setup again
-          </button>
-        )}
-
-        <div className="row end">
-          <button disabled={busy || !path} onClick={() => act(() => client.openProject(path))}>
-            Open existing
-          </button>
-          <button className="primary" disabled={busy || !path || !name} onClick={() => act(() => client.createProject(path, name, kind))}>
-            Create project
-          </button>
-        </div>
       </div>
-    </div>
+    </Shell>
   );
 }

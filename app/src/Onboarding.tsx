@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import type { Benchmark, EngineClient, Focus, LicenceStatus, SystemInfo } from "./engine";
 import { ProPanel } from "./ProPanel";
+import { Shell } from "./Shell";
 
 const STEPS = ["Welcome", "Your PC", "What you'll make", "Pro"] as const;
 
@@ -8,7 +9,7 @@ const FOCUS: { id: Focus; title: string; text: string }[] = [
   { id: "videos", title: "Videos", text: "Holiday clips, vlogs, family movies" },
   { id: "reels", title: "Reels and shorts", text: "Turn long videos into TikToks and Reels" },
   { id: "photos", title: "Photos", text: "Fix and style pictures" },
-  { id: "automation", title: "Automation", text: "Run edits from n8n, scripts or AI agents" },
+  { id: "automation", title: "Automation", text: "Run edits from n8n, scripts or agents" },
 ];
 
 type Check = { label: string; state: "ok" | "warn" | "off"; detail: string };
@@ -33,7 +34,7 @@ function checks(info: SystemInfo): Check[] {
       detail: info.hardware_encoder ? "NVIDIA encoder found" : "Not available · exports use the processor",
     },
     {
-      label: "AI editing",
+      label: "Editing model",
       state: info.ai.editing_model.ready ? "ok" : "warn",
       detail: info.ai.editing_model.ready ? "Ready" : "Not installed yet · simple rules are used instead",
     },
@@ -81,24 +82,42 @@ export function Onboarding({ client, licence, onLicence, onDone }: Props) {
     onDone(focus);
   };
 
+  const nav = (
+    <>
+      {step > 0 ? <button onClick={() => setStep(step - 1)}>Back</button> : <span />}
+      {step < STEPS.length - 1 ? (
+        <button className="primary" onClick={() => setStep(step + 1)}>
+          {step === 0 ? "Get started" : "Continue"}
+        </button>
+      ) : (
+        <button className={licence?.pro ? "primary" : ""} disabled={saving} onClick={finish}>
+          {licence?.pro ? "Open AIEditor" : "Continue with Free"}
+        </button>
+      )}
+    </>
+  );
+
   return (
-    <div className="center onboard-wrap">
-      <div className="card onboard">
-        <ol className="dots" aria-label="Setup steps">
+    <Shell
+      footer={nav}
+      side={
+        <ol className="steps" aria-label="Setup steps">
           {STEPS.map((s, i) => (
-            <li key={s} className={i === step ? "now" : i < step ? "done" : ""}>
-              <span>{s}</span>
+            <li key={s} className={i === step ? "now" : i < step ? "done" : ""} aria-current={i === step ? "step" : undefined}>
+              <span className="step-n">{i < step ? "✓" : i + 1}</span>
+              {s}
             </li>
           ))}
         </ol>
-
+      }
+    >
         {step === 0 && (
           <div className="ob-body">
-            <h1>Make videos by saying what you want.</h1>
+            <h1>Edit photos and video by describing the result.</h1>
             <p className="lead">Pick your clips, describe the edit in plain words, and choose from a few versions. You can change anything by hand afterwards.</p>
             <ul className="ticks">
               <li>Works on this computer. Your photos and videos are never uploaded.</li>
-              <li>Every AI change can be undone with one click.</li>
+              <li>Every automatic edit can be undone with one click.</li>
               <li>Editing is free, with no watermark.</li>
             </ul>
           </div>
@@ -106,9 +125,9 @@ export function Onboarding({ client, licence, onLicence, onDone }: Props) {
 
         {step === 1 && (
           <div className="ob-body">
-            <h2>Checking your PC</h2>
+            <h2>Your PC</h2>
             {checkError && <p className="error">{checkError}</p>}
-            {!info && !checkError && <p className="muted">Looking at your processor, memory and AI parts…</p>}
+            {!info && !checkError && <p className="muted">Checking processor, memory and installed components…</p>}
             {info && (
               <ul className="checks">
                 {checks(info).map((c) => (
@@ -150,19 +169,6 @@ export function Onboarding({ client, licence, onLicence, onDone }: Props) {
           </div>
         )}
 
-        <div className="ob-nav">
-          {step > 0 ? <button onClick={() => setStep(step - 1)}>Back</button> : <span />}
-          {step < STEPS.length - 1 ? (
-            <button className="primary" onClick={() => setStep(step + 1)}>
-              {step === 0 ? "Get started" : "Next"}
-            </button>
-          ) : (
-            <button className="primary" disabled={saving} onClick={finish}>
-              {licence?.pro ? "Start editing" : "Skip for now and start editing"}
-            </button>
-          )}
-        </div>
-      </div>
-    </div>
+    </Shell>
   );
 }
