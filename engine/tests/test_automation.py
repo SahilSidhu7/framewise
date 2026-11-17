@@ -96,8 +96,8 @@ def test_webhook_signature_and_retry():
     webhooks.deliver(hook.url, "s3cret", "job.done", {"job": {"id": "j_1"}}, results.append, delays=(0.05, 0.05)).join(5)
     assert len(hook.calls) == 2 and results[0]["delivered"] and results[0]["attempts"] == 2
     headers, raw = hook.calls[-1]
-    assert headers["x-aieditor-event"] == "job.done" and headers["x-aieditor-job"] == "j_1"
-    assert webhooks.verify_signature("s3cret", raw, headers["x-aieditor-signature"])
+    assert headers["x-framewise-event"] == "job.done" and headers["x-framewise-job"] == "j_1"
+    assert webhooks.verify_signature("s3cret", raw, headers["x-framewise-signature"])
 
 
 def _api(home: Path):
@@ -137,7 +137,7 @@ def test_api_upload_job_wait_download_and_webhook(home, video_file, tmp_path):
             assert s.codec_context.width == s.codec_context.height
         hook.wait()
         headers, raw = hook.calls[0]
-        assert webhooks.verify_signature("hook-secret-1", raw, headers["x-aieditor-signature"])
+        assert webhooks.verify_signature("hook-secret-1", raw, headers["x-framewise-signature"])
         assert json.loads(raw)["job"]["state"] == "done"
         # the desktop app's engine token works too, and admins see every job
         assert any(j["id"] == jid for j in c.get("/v1/jobs", headers={"X-Engine-Token": "tok"}).json())
@@ -264,7 +264,7 @@ def test_jobs_survive_restart_and_cancel(home, image_file):
 def test_watch_folder_processes_new_files_once(home, image_file, tmp_path):
     inbox = tmp_path / "inbox"
     inbox.mkdir()
-    (inbox / "aieditor-watch.yaml").write_text(f"recipe: render\noptions: {{program: '{PHOTO_PROGRAM}'}}\n")
+    (inbox / "framewise-watch.yaml").write_text(f"recipe: render\noptions: {{program: '{PHOTO_PROGRAM}'}}\n")
     m = JobManager(home, start=False)
     w = FolderWatcher(m, inbox)
     (inbox / "a.png").write_bytes(image_file.read_bytes())
@@ -281,7 +281,7 @@ def test_mcp_server_lists_and_runs(home, image_file):
     m = JobManager(home, workers=1)
     srv = McpServer(m)
     init = srv.handle({"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {"protocolVersion": "2025-06-18"}})
-    assert init["result"]["serverInfo"]["name"] == "aieditor"
+    assert init["result"]["serverInfo"]["name"] == "framewise"
     assert srv.handle({"jsonrpc": "2.0", "method": "notifications/initialized"}) is None
     tools = srv.handle({"jsonrpc": "2.0", "id": 2, "method": "tools/list"})["result"]["tools"]
     assert {t["name"] for t in tools} == {"list_recipes", "list_styles", "run_recipe", "get_job", "cancel_job"}

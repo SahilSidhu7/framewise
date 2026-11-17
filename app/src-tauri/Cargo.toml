@@ -1,7 +1,7 @@
 [package]
-name = "aieditor"
+name = "framewise"
 version = "0.1.0"
-description = "AIEditor desktop shell"
+description = "Framewise desktop shell"
 edition = "2021"
 
 [lib]

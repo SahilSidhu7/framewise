@@ -75,7 +75,7 @@ jobs:
       - name: Sidecar smoke test (prints ready line)
         shell: bash
         run: |
-          bin=$(ls app/src-tauri/binaries/aieditor-engine-*)
+          bin=$(ls app/src-tauri/binaries/framewise-engine-*)
           "$bin" --port 0 > ready.txt 2> engine.log &
           pid=$!
           for i in $(seq 1 60); do grep -q ready ready.txt && break; sleep 1; done
@@ -89,7 +89,7 @@ jobs:
           npx tauri build --config src-tauri/tauri.bundle.conf.json
       - uses: actions/upload-artifact@v4
         with:
-          name: aieditor-${{ matrix.os }}
+          name: framewise-${{ matrix.os }}
           path: |
             app/src-tauri/target/release/bundle/**/*.msi
             app/src-tauri/target/release/bundle/**/*.exe

@@ -1,5 +1,5 @@
 {
-  "name": "AIEditor: long video to captioned shorts (HTTP nodes only)",
+  "name": "Framewise: long video to captioned shorts (HTTP nodes only)",
   "nodes": [
     {
       "parameters": {},

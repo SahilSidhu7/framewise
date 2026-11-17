@@ -1,4 +1,4 @@
-<title>AIEditor Architecture</title>
+<title>Framewise Architecture</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;600&family=JetBrains+Mono:wght@400;600&display=swap">
 <style>
@@ -75,7 +75,7 @@ html { scroll-behavior: smooth; }
 
 <main>
 <header>
-  <h1>How AIEditor works</h1>
+  <h1>How Framewise works</h1>
   <p>A low-level design tour of the editor as it stands after phases A1, C, D and R1. Every box on these diagrams is a real
   module in <code>engine/src/aieditor_engine</code> or <code>app/</code>. Each section starts with a plain-words summary, then the diagram, then the detail.</p>
   <div class="legend">
@@ -89,13 +89,13 @@ html { scroll-behavior: smooth; }
   <p class="eyebrow">01 · System context</p>
   <h2>The big map</h2>
   <div class="plain"><b>In plain words:</b> there is one "engine" program that does all the work (AI, analysis, rendering).
-  Everything else is a way of talking to it: the desktop app, the <code>aieditor</code> command, n8n over HTTP, and AI agents over MCP.
+  Everything else is a way of talking to it: the desktop app, the <code>framewise</code> command, n8n over HTTP, and AI agents over MCP.
   Nothing leaves your computer unless you add a webhook or give it a web link to download.</div>
   <div class="diagram"><pre class="mermaid">
 flowchart LR
   subgraph Clients
     UI["Desktop app<br/>React UI in Tauri shell"]
-    CLI["aieditor command<br/>reel / photo / captions ..."]
+    CLI["framewise command<br/>reel / photo / captions ..."]
     N8N["n8n, Zapier, scripts<br/>HTTP /v1"]
     AGENT["AI agents<br/>MCP over stdio"]
   end
@@ -113,7 +113,7 @@ flowchart LR
     LLM["llama-server<br/>small local LLM"]
     WH["whisper.cpp<br/>speech to text"]
     FS["Project folder<br/>media, proxies, cache"]
-    HOME["%LOCALAPPDATA%/AIEditor<br/>licence, keys, jobs, models"]
+    HOME["%LOCALAPPDATA%/Framewise<br/>licence, keys, jobs, models"]
   end
   UI -- "per-launch token" --> API
   CLI --> JM
@@ -143,9 +143,9 @@ flowchart LR
       <tr><td class="m">video</td><td><code>vdsl.py</code>, <code>compose.py</code>, <code>text.py</code>, <code>captions.py</code>, <code>placement.py</code>, <code>reframe.py</code>, <code>audio.py</code>, <code>export.py</code></td><td>Video Edit DSL parser/decompiler, layered compositor, caption drawing and placement, subject tracking for 9:16, audio mix with loudness, parallel segment export.</td></tr>
       <tr><td class="m">imaging</td><td><code>ops.py</code>, <code>render.py</code>, <code>recipes/</code></td><td>Photo operations and looks; also the colour grade used on every video frame (baked into a 3D LUT by <code>video/fastgrade.py</code>).</td></tr>
       <tr><td class="m">automation</td><td><code>jobs.py</code>, <code>recipes.py</code>, <code>keys.py</code>, <code>webhooks.py</code>, <code>watch.py</code>, <code>mcp.py</code></td><td>Job queue that survives restarts, seven recipes, hashed API keys with scopes, HMAC-signed webhooks with retries, watch folders, MCP server.</td></tr>
-      <tr><td class="m">api</td><td><code>server.py</code>, <code>video_routes.py</code>, <code>public_routes.py</code></td><td>Desktop routes (token-protected, loopback only) and the public <code>/v1</code> job API mounted by <code>aieditor serve</code>.</td></tr>
+      <tr><td class="m">api</td><td><code>server.py</code>, <code>video_routes.py</code>, <code>public_routes.py</code></td><td>Desktop routes (token-protected, loopback only) and the public <code>/v1</code> job API mounted by <code>framewise serve</code>.</td></tr>
       <tr><td class="m">licence.py</td><td>one file</td><td>Pure-Python Ed25519 check of <code>AIE1-…</code> keys, 14-day trial, free-tier limits.</td></tr>
-      <tr><td class="m">cli.py</td><td>one file</td><td>The <code>aieditor</code> command: serve, one-shot recipes, watch, keys, licence, mcp.</td></tr>
+      <tr><td class="m">cli.py</td><td>one file</td><td>The <code>framewise</code> command: serve, one-shot recipes, watch, keys, licence, mcp.</td></tr>
     </tbody>
   </table></div>
 </section>
@@ -317,7 +317,7 @@ stateDiagram-v2
     <tbody>
       <tr><td class="m">Upload</td><td><code>PUT /v1/files?name=talk.mp4</code> with the raw body, returns <code>f_…</code>. Inputs can also be URLs or (scope <code>local</code>) paths.</td></tr>
       <tr><td class="m">Wait</td><td><code>GET /v1/jobs/{id}/wait?timeout=120</code> long-polls; n8n loops on it.</td></tr>
-      <tr><td class="m">Webhook</td><td>Header <code>X-AIEditor-Signature: t=…,v1=HMAC_SHA256(secret, "t." + raw body)</code>; retried after 2, 10 and 30 s.</td></tr>
+      <tr><td class="m">Webhook</td><td>Header <code>X-Framewise-Signature: t=…,v1=HMAC_SHA256(secret, "t." + raw body)</code>; retried after 2, 10 and 30 s.</td></tr>
       <tr><td class="m">Keys</td><td><code>aie_&lt;id&gt;_&lt;secret&gt;</code>, stored as SHA-256 only; scopes <code>jobs</code>, <code>local</code>, <code>admin</code>; a key sees only its own jobs.</td></tr>
     </tbody>
   </table></div>
@@ -330,7 +330,7 @@ stateDiagram-v2
   signature without the internet. Only the seller's machine has the private half that makes keys.</div>
   <div class="diagram"><pre class="mermaid">
 flowchart LR
-  SELL["Seller PC<br/>tools/licence_issuer.py<br/>private key in ~/.aieditor-issuer"] -- "AIE1-payload.signature" --> USER["Customer pastes key<br/>aieditor licence activate"]
+  SELL["Seller PC<br/>tools/licence_issuer.py<br/>private key in ~/.aieditor-issuer"] -- "AIE1-payload.signature" --> USER["Customer pastes key<br/>framewise licence activate"]
   USER --> STORE["licence.json"]
   STORE --> CHECK{"Ed25519 verify<br/>with built-in public key"}
   CHECK -- "valid, not expired" --> PRO["Pro / Studio"]
@@ -338,8 +338,8 @@ flowchart LR
   CHECK -- "otherwise" --> FREE["Free"]
   </pre></div>
   <div class="grid2">
-    <div class="card"><h3><span class="tag free">FREE</span>Always</h3><p>Whole desktop editor. One-shot <code>aieditor</code> commands and MCP with limits: 1 reel per video, 1 photo per job, no webhooks.</p></div>
-    <div class="card"><h3><span class="tag pro">PRO</span>Unlocks</h3><p><code>aieditor serve</code> (the /v1 API for n8n), watch folders, batches, webhooks, up to 10 reels per video. Blocked calls answer HTTP 402 with how to start a trial.</p></div>
+    <div class="card"><h3><span class="tag free">FREE</span>Always</h3><p>Whole desktop editor. One-shot <code>framewise</code> commands and MCP with limits: 1 reel per video, 1 photo per job, no webhooks.</p></div>
+    <div class="card"><h3><span class="tag pro">PRO</span>Unlocks</h3><p><code>framewise serve</code> (the /v1 API for n8n), watch folders, batches, webhooks, up to 10 reels per video. Blocked calls answer HTTP 402 with how to start a trial.</p></div>
   </div>
 </section>
 
@@ -347,13 +347,13 @@ flowchart LR
   <p class="eyebrow">10 · Packaging</p>
   <h2>What the installer puts on your PC</h2>
   <div class="plain"><b>In plain words:</b> one 105 MB installer, no admin rights. The app window is a small Rust program; the engine is one
-  frozen Python program it starts in the background. The same engine file is also the <code>aieditor</code> command.</div>
+  frozen Python program it starts in the background. The same engine file is also the <code>framewise</code> command.</div>
   <div class="diagram"><pre class="mermaid">
 flowchart TD
-  SETUP["AIEditor_0.1.0_x64-setup.exe<br/>NSIS, per-user"] --> DIR["%LOCALAPPDATA%/AIEditor"]
-  DIR --> APP["aieditor.exe<br/>Tauri shell + React UI"]
-  DIR --> ENG["aieditor-engine.exe<br/>PyInstaller, ~3 s start"]
-  SETUP --> CMD["WindowsApps/aieditor.cmd<br/>already on PATH"]
+  SETUP["Framewise_0.1.0_x64-setup.exe<br/>NSIS, per-user"] --> DIR["%LOCALAPPDATA%/Framewise"]
+  DIR --> APP["framewise.exe<br/>Tauri shell + React UI"]
+  DIR --> ENG["framewise-engine.exe<br/>PyInstaller, ~3 s start"]
+  SETUP --> CMD["WindowsApps/framewise.cmd<br/>already on PATH"]
   APP -- "starts, reads ready line<br/>{port, token}" --> ENG
   CMD -- "cli args" --> ENG
   DIR --> DATA["models/, runtime/ (whisper), automation/, licence.json<br/>kept on uninstall"]
@@ -367,7 +367,7 @@ flowchart TD
     <thead><tr><th>Boundary</th><th>Rule</th></tr></thead>
     <tbody>
       <tr><td class="m">Desktop engine</td><td>Binds 127.0.0.1 only, on a random port, with a fresh token per launch that never touches disk.</td></tr>
-      <tr><td class="m">aieditor serve</td><td>Loopback by default; <code>--allow-lan</code> needed for a network address, with a warning. Never expose it to the internet directly.</td></tr>
+      <tr><td class="m">framewise serve</td><td>Loopback by default; <code>--allow-lan</code> needed for a network address, with a warning. Never expose it to the internet directly.</td></tr>
       <tr><td class="m">API keys</td><td>Hashed at rest, constant-time compare, scopes; paths on your disk need the <code>local</code> scope.</td></tr>
       <tr><td class="m">Webhooks</td><td>HMAC-SHA256 over timestamp + raw body; receivers reject anything older than 5 minutes.</td></tr>
       <tr><td class="m">Licence</td><td>Offline Ed25519 signature; the engine cannot make keys. Open-core: a determined user can patch Python, which is accepted.</td></tr>

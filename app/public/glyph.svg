@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="10 8 44 46" width="44" height="46">
-  <!-- AIEditor glyph without the tile, for dark backgrounds (UI header, site). -->
+  <!-- Framewise glyph without the tile, for dark backgrounds (UI header, site). -->
   <rect x="12" y="19" width="34" height="7" rx="2" fill="#eceef1"/>
   <rect x="22" y="29.5" width="30" height="7" rx="2" fill="#9aa1ab"/>
   <rect x="12" y="40" width="20" height="7" rx="2" fill="#5a616c"/>

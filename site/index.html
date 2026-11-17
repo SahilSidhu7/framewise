@@ -3,9 +3,9 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>AIEditor · Video and photo editor that runs on your PC</title>
-<meta name="description" content="Describe the edit and AIEditor cuts, colours, captions and exports it. Long videos become reels. Runs on your own computer with no subscription, and can be automated from n8n.">
-<meta property="og:title" content="AIEditor">
+<title>Framewise · Video and photo editor that runs on your PC</title>
+<meta name="description" content="Describe the edit and Framewise cuts, colours, captions and exports it. Long videos become reels. Runs on your own computer with no subscription, and can be automated from n8n.">
+<meta property="og:title" content="Framewise">
 <meta property="og:description" content="Video and photo editor that runs on your PC. Describe the edit, keep full control.">
 <meta property="og:image" content="/img/app_video.jpg">
 <meta name="theme-color" content="#0e0f11">
@@ -133,7 +133,7 @@ footer .credits { font-size: 12px; max-width: 90ch; }
 
 <header class="top gutter">
   <div class="inner">
-    <a class="brand" href="/"><img src="/glyph.svg" alt="">AIEditor</a>
+    <a class="brand" href="/"><img src="/glyph.svg" alt="">Framewise</a>
     <nav aria-label="Main">
       <a href="#workflow">Workflow</a>
       <a href="#features">Features</a>
@@ -149,7 +149,7 @@ footer .credits { font-size: 12px; max-width: 90ch; }
   <div class="inner">
     <p class="label">Windows · beta in testing</p>
     <h1>Describe the edit. Keep full control.</h1>
-    <p class="sub">AIEditor cuts, colours, captions and exports your footage from a short description, then hands you an ordinary timeline to refine. It runs entirely on your PC, with no subscription.</p>
+    <p class="sub">Framewise cuts, colours, captions and exports your footage from a short description, then hands you an ordinary timeline to refine. It runs entirely on your PC, with no subscription.</p>
     <div class="ctas">
       <a class="btn primary" href="#workflow">See how it works</a>
       <a class="btn" href="#automation">Automation API</a>
@@ -157,7 +157,7 @@ footer .credits { font-size: 12px; max-width: 90ch; }
     </div>
     <div class="window">
       <div class="bar"><i></i><i></i><i></i><span>Coastline · 1920×1080 · 30 fps</span></div>
-      <img src="/img/app_video.jpg" width="2000" height="1200" alt="The AIEditor video editor: media bin, viewer showing aerial beach footage, an Auto edit panel and a three-track timeline.">
+      <img src="/img/app_video.jpg" width="2000" height="1200" alt="The Framewise video editor: media bin, viewer showing aerial beach footage, an Auto edit panel and a three-track timeline.">
     </div>
   </div>
 </div>
@@ -187,7 +187,7 @@ footer .credits { font-size: 12px; max-width: 90ch; }
         <li><b>Export</b><span>Platform presets for TikTok, Reels, Shorts and YouTube. NVIDIA hardware encoding when available.</span></li>
       </ul>
     </div>
-    <div class="shot"><img src="/img/app_photo.jpg" width="2000" height="1200" alt="The AIEditor photo editor with a pastry photo, a film look applied, and the Auto edit panel." loading="lazy"></div>
+    <div class="shot"><img src="/img/app_photo.jpg" width="2000" height="1200" alt="The Framewise photo editor with a pastry photo, a film look applied, and the Auto edit panel." loading="lazy"></div>
   </div>
 </section>
 
@@ -200,13 +200,13 @@ footer .credits { font-size: 12px; max-width: 90ch; }
       <div class="integrations"><span>n8n node</span><span>REST API</span><span>Signed webhooks</span><span>CLI</span><span>Watch folders</span><span>MCP</span></div>
     </div>
     <pre class="term" aria-label="Command line example"><span class="c"># one long video in, three TikTok reels out</span>
-<span class="k">aieditor</span> reel talk.mp4 --platform tiktok --set count=3 --out shorts/
+<span class="k">framewise</span> reel talk.mp4 --platform tiktok --set count=3 --out shorts/
 
 <span class="c"># captions burned in, plus an .srt</span>
-<span class="k">aieditor</span> captions interview.mp4 --set style=boxed
+<span class="k">framewise</span> captions interview.mp4 --set style=boxed
 
 <span class="c"># headless API on 127.0.0.1:8765</span>
-<span class="k">aieditor</span> serve
+<span class="k">framewise</span> serve
 
 curl -X POST http://127.0.0.1:8765/v1/jobs \
   -H "Authorization: Bearer $KEY" \
@@ -276,8 +276,8 @@ curl -X POST http://127.0.0.1:8765/v1/jobs \
 <footer class="gutter">
   <div class="inner">
     <div class="row">
-      <a class="brand" href="/"><img src="/glyph.svg" alt="">AIEditor</a>
-      <span>© 2026 AIEditor · Windows beta in testing</span>
+      <a class="brand" href="/"><img src="/glyph.svg" alt="">Framewise</a>
+      <span>© 2026 Framewise · Windows beta in testing</span>
     </div>
     <p class="credits">Footage in screenshots: "Aerial view of sand beach" by Nature video (CC BY 3.0), "Alaskan Way Viaduct timelapse" by jonknee (CC BY 3.0), "Berliner Pfannkuchen 5" by Sebastian Koppehel (CC BY 4.0), "Upbeat Forever" by Kevin MacLeod (CC BY 3.0), via Wikimedia Commons.</p>
   </div>

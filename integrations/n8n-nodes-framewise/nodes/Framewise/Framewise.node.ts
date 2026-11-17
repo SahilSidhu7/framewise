@@ -197,29 +197,29 @@ const properties: INodeProperties[] = [
 	},
 ];
 
-export class AIEditor implements INodeType {
+export class Framewise implements INodeType {
 	description: INodeTypeDescription = {
-		displayName: 'AIEditor',
-		name: 'aiEditor',
-		icon: 'file:aieditor.svg',
+		displayName: 'Framewise',
+		name: 'framewise',
+		icon: 'file:framewise.svg',
 		group: ['transform'],
 		version: 1,
 		subtitle: '={{$parameter["operation"]}}',
-		description: 'Make reels, captions and AI edits with the AIEditor engine on your own computer',
-		defaults: { name: 'AIEditor' },
+		description: 'Make reels, captions and AI edits with the Framewise engine on your own computer',
+		defaults: { name: 'Framewise' },
 		inputs: ['main'],
 		outputs: ['main'],
-		credentials: [{ name: 'aiEditorApi', required: true }],
+		credentials: [{ name: 'framewiseApi', required: true }],
 		properties,
 	};
 
 	async execute(this: IExecuteFunctions): Promise<INodeExecutionData[][]> {
 		const items = this.getInputData();
 		const out: INodeExecutionData[] = [];
-		const creds = await this.getCredentials('aiEditorApi');
+		const creds = await this.getCredentials('framewiseApi');
 		const base = String(creds.baseUrl).replace(/\/+$/, '');
 		const call = async (opts: Partial<IHttpRequestOptions> & { url: string }) =>
-			this.helpers.httpRequestWithAuthentication.call(this, 'aiEditorApi', {
+			this.helpers.httpRequestWithAuthentication.call(this, 'framewiseApi', {
 				json: true,
 				...opts,
 				url: base + opts.url,
@@ -283,7 +283,7 @@ export class AIEditor implements INodeType {
 						while (!['done', 'failed', 'cancelled'].includes(String(job.state)) && Date.now() < until) {
 							job = await call({ method: 'GET', url: `/v1/jobs/${job.id}/wait`, qs: { timeout: 60 } });
 						}
-						if (job.state === 'failed') throw new NodeOperationError(this.getNode(), `AIEditor job failed: ${job.error}`, { itemIndex: i });
+						if (job.state === 'failed') throw new NodeOperationError(this.getNode(), `Framewise job failed: ${job.error}`, { itemIndex: i });
 					}
 				}
 

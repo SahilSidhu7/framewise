@@ -1,4 +1,4 @@
-<title>AIEditor Handbook</title>
+<title>Framewise Handbook</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap">
 <style>
@@ -91,14 +91,14 @@ a { color: var(--accent); }
 <main>
 <header>
   <p class="label">Project handbook · state as of 17 Nov 2026</p>
-  <h1>How AIEditor works</h1>
+  <h1>How Framewise works</h1>
   <p class="lede">A plain-language guide to the whole project: what runs where, what happens when you ask for an edit, how the automatic editing makes its decisions, and how it was built. Each part says whether it exists today or is still planned.</p>
 </header>
 
 <section id="minute">
   <p class="label">01</p>
   <h2>In one minute</h2>
-  <p>AIEditor is a desktop photo and video editor for Windows. You describe the result you want ("cinematic travel video, 60 seconds, with music"), and it produces three finished versions you can preview, pick from and then change by hand. It can also turn one long video into several short, captioned vertical reels.</p>
+  <p>Framewise is a desktop photo and video editor for Windows. You describe the result you want ("cinematic travel video, 60 seconds, with music"), and it produces three finished versions you can preview, pick from and then change by hand. It can also turn one long video into several short, captioned vertical reels.</p>
   <p>Everything runs on your own computer. There is no server of ours involved in editing: the speech recognition and the language model run locally, and your files are never uploaded.</p>
   <div class="callout key"><b>The one idea to remember.</b> The model never touches pixels and never edits your project directly. It writes a short <em>edit program</em> (a few lines of text in our own Edit DSL). The engine checks that program, turns it into normal timeline changes, and renders it. That is why every automatic edit is previewable, editable, and one Undo away.</div>
 </section>
@@ -111,7 +111,7 @@ a { color: var(--accent); }
 flowchart LR
   subgraph You
     APP["Desktop app<br/>React UI + Tauri shell"]
-    CLI["aieditor command"]
+    CLI["framewise command"]
     N8N["n8n / scripts / agents"]
   end
   subgraph ENGINE["Engine (Python, runs locally)"]
@@ -244,7 +244,7 @@ fin       ::= ("grain 0." [0-3] [0-9] | "vignette 0." [1-4] | "bloom 0." [1-3])<
     <li><span class="d">6 Nov</span><br><b>Video v1.</b><p>Timeline compositor, export, captions from speech, the video director and the video editor screen.</p></li>
     <li><span class="d">11 Nov</span><br><b>Quality pass on real stock footage.</b><p>Edits were run on real clips and the failures fixed: exposure and colour-cast notes, white balance, planner mistakes.</p></li>
     <li><span class="d">15 Nov</span><br><b>Layers (A1) and automatic editing (C).</b><p>Layered compositor with keyframes; then style and output options next to the prompt, highlight finding, auto-reframe, silence cutting and reels.</p></li>
-    <li><span class="d">16 Nov</span><br><b>Automation (D).</b><p>Headless API with keys and signed webhooks, seven recipes, the aieditor command, watch folders, MCP and the n8n node, tested inside real n8n.</p></li>
+    <li><span class="d">16 Nov</span><br><b>Automation (D).</b><p>Headless API with keys and signed webhooks, seven recipes, the framewise command, watch folders, MCP and the n8n node, tested inside real n8n.</p></li>
     <li><span class="d">16 Nov</span><br><b>Release prep (R1).</b><p>Offline Pro licences, caption placement and word highlight, the Windows installer, the website, onboarding and the Pro screen.</p></li>
     <li><span class="d">17 Nov</span><br><b>Brand and redesign.</b><p>New logo and a professional interface, plus a fix so the engine never outlives the app.</p></li>
   </ul>
@@ -258,7 +258,7 @@ fin       ::= ("grain 0." [0-3] [0-9] | "vignette 0." [1-4] | "bloom 0." [1-3])<
   <h3>What it will learn from</h3>
   <ol class="steps">
     <li><div><b>An editing playbook</b> written by us (about 300 rules with good and bad examples), used for knowledge, for the rationale line, and as an automatic linter.</div></li>
-    <li><div><b>Expert recordings.</b> Professional editors edit freely licensed media inside AIEditor; the editor records their exact actions as edit programs. This is the most valuable data.</div></li>
+    <li><div><b>Expert recordings.</b> Professional editors edit freely licensed media inside Framewise; the editor records their exact actions as edit programs. This is the most valuable data.</div></li>
     <li><div><b>Synthetic data.</b> "Inverse edits": take a clean photo, apply a random look, have a teacher write the request that would produce it. For video, a large open teacher model plans edits that are executed in the engine; failures are dropped.</div></li>
     <li><div><b>Opt-in feedback.</b> Which versions beta users keep or undo (only with consent).</div></li>
   </ol>

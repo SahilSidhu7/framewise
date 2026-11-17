@@ -1,8 +1,8 @@
 """PyInstaller entry point (absolute imports; __main__.py uses relative imports).
 
 One frozen binary, two jobs:
-    aieditor-engine.exe [--port N]          desktop engine (what the app launches)
-    aieditor-engine.exe serve | reel | ...  the `aieditor` command line (aieditor.cmd forwards here)
+    framewise-engine.exe [--port N]          desktop engine (what the app launches)
+    framewise-engine.exe serve | reel | ...  the `framewise` command line (framewise.cmd forwards here)
 """
 
 import multiprocessing
@@ -15,7 +15,7 @@ CLI_COMMANDS = {"serve", "run", "reel", "highlights", "captions", "edit", "photo
 
 def main() -> None:
     multiprocessing.freeze_support()
-    if Path(sys.argv[0]).stem.lower() == "aieditor" or (len(sys.argv) > 1 and sys.argv[1] in CLI_COMMANDS):
+    if Path(sys.argv[0]).stem.lower() in ("framewise", "fw") or (len(sys.argv) > 1 and sys.argv[1] in CLI_COMMANDS):
         from aieditor_engine.cli import main as cli
 
         raise SystemExit(cli(sys.argv[1:]))

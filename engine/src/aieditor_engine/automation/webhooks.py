@@ -1,9 +1,9 @@
 """Signed webhooks for finished jobs.
 
 Each delivery is a POST with a JSON body and these headers:
-    X-AIEditor-Event:     job.done | job.failed | job.cancelled
-    X-AIEditor-Job:       the job id
-    X-AIEditor-Signature: t=<unix seconds>,v1=<hex HMAC-SHA256(secret, "<t>.<raw body>")>
+    X-Framewise-Event:     job.done | job.failed | job.cancelled
+    X-Framewise-Job:       the job id
+    X-Framewise-Signature: t=<unix seconds>,v1=<hex HMAC-SHA256(secret, "<t>.<raw body>")>
 
 Receivers should recompute the HMAC over the raw body, compare in constant
 time and reject timestamps older than a few minutes (see verify_signature).
@@ -60,9 +60,9 @@ def deliver(url: str, secret: str, event: str, payload: dict[str, Any],
                 time.sleep(wait)
             attempts += 1
             req = urllib.request.Request(url, data=body, method="POST", headers={
-                "Content-Type": "application/json", "User-Agent": "AIEditor-Webhook/1",
-                "X-AIEditor-Event": event, "X-AIEditor-Job": str(payload.get("job", {}).get("id", "")),
-                "X-AIEditor-Signature": sign(secret, body),
+                "Content-Type": "application/json", "User-Agent": "Framewise-Webhook/1",
+                "X-Framewise-Event": event, "X-Framewise-Job": str(payload.get("job", {}).get("id", "")),
+                "X-Framewise-Signature": sign(secret, body),
             })
             try:
                 with urllib.request.urlopen(req, timeout=TIMEOUT) as resp:  # noqa: S310 - http(s) checked by caller

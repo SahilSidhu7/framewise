@@ -24,7 +24,7 @@ def test_key(monkeypatch: pytest.MonkeyPatch) -> None:
 @pytest.fixture
 def free(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> L.LicenceStore:
     folder = tmp_path / "free_config"
-    monkeypatch.setenv("AIEDITOR_CONFIG", str(folder))
+    monkeypatch.setenv("FRAMEWISE_CONFIG", str(folder))
     return L.LicenceStore()
 
 
@@ -82,7 +82,7 @@ def test_parse_keys(test_key: None) -> None:
 def test_store_trial_activate_env(test_key: None, free: L.LicenceStore, monkeypatch: pytest.MonkeyPatch) -> None:
     st = free.status()
     assert (st["tier"], st["pro"]) == ("free", False)
-    with pytest.raises(L.LicenceRequired, match="aieditor licence trial"):
+    with pytest.raises(L.LicenceRequired, match="framewise licence trial"):
         free.require("serve")
 
     st = free.start_trial()

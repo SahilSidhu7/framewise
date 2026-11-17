@@ -1,10 +1,10 @@
-// Runs the compiled AIEditor n8n node against a live engine with a fake IExecuteFunctions.
-// usage: npm run build && node test/live.js <baseUrl> <apiKey> <stockDir>   (needs `aieditor serve` running)
+// Runs the compiled Framewise n8n node against a live engine with a fake IExecuteFunctions.
+// usage: npm run build && node test/live.js <baseUrl> <apiKey> <stockDir>   (needs `framewise serve` running)
 const fs = require('fs');
 const path = require('path');
 const [, , BASE, KEY, STOCK] = process.argv;
-const nodeJs = path.join(__dirname, '../dist/nodes/AIEditor/AIEditor.node.js');
-const { AIEditor } = require(path.resolve(nodeJs));
+const nodeJs = path.join(__dirname, '../dist/nodes/Framewise/Framewise.node.js');
+const { Framewise } = require(path.resolve(nodeJs));
 
 async function httpRequest(opts) {
 	let url = opts.url;
@@ -23,17 +23,17 @@ async function httpRequest(opts) {
 }
 
 function ctx(items, params, { continueOnFail = false } = {}) {
-	const node = new AIEditor();
+	const node = new Framewise();
 	const props = Object.fromEntries(node.description.properties.map((p) => [p.name, p.default]));
 	return {
 		getInputData: () => items,
 		getCredentials: async () => ({ baseUrl: BASE + '/', apiKey: KEY }),
 		getNodeParameter: (name, i, fallback) => (name in params ? params[name] : name in props ? props[name] : fallback),
-		getNode: () => ({ name: 'AIEditor', type: 'aiEditor', typeVersion: 1, parameters: params }),
+		getNode: () => ({ name: 'Framewise', type: 'framewise', typeVersion: 1, parameters: params }),
 		continueOnFail: () => continueOnFail,
 		helpers: {
 			httpRequestWithAuthentication: async function (cred, opts) {
-				if (cred !== 'aiEditorApi') throw new Error('bad credential name ' + cred);
+				if (cred !== 'framewiseApi') throw new Error('bad credential name ' + cred);
 				return httpRequest({ ...opts, headers: { ...(opts.headers || {}), Authorization: `Bearer ${KEY}` } });
 			},
 			assertBinaryData: (i, prop) => {

@@ -135,9 +135,9 @@ export function ProPanel({ client, status, onChange }: Props) {
 export function ProModal(props: Props & { onClose: () => void }) {
   return (
     <div className="modal-backdrop" onClick={props.onClose}>
-      <div className="card modal pro-modal" role="dialog" aria-label="AIEditor Pro" onClick={(e) => e.stopPropagation()}>
+      <div className="card modal pro-modal" role="dialog" aria-label="Framewise Pro" onClick={(e) => e.stopPropagation()}>
         <div className="row between">
-          <h3>AIEditor Pro</h3>
+          <h3>Framewise Pro</h3>
           <button className="icon" aria-label="Close" onClick={props.onClose}>
             ✕
           </button>

@@ -4,7 +4,7 @@
 //! Engine resolution order:
 //! 1. `AIEDITOR_ENGINE_PYTHON` env var -> `<python> -m aieditor_engine`
 //! 2. debug builds: `engine/.venv` next to this repo -> `python -m aieditor_engine`
-//! 3. release builds: bundled sidecar `aieditor-engine[.exe]` beside the app executable
+//! 3. release builds: bundled sidecar `framewise-engine[.exe]` beside the app executable
 
 use std::io::{BufRead, BufReader};
 use std::path::PathBuf;
@@ -66,7 +66,7 @@ fn engine_command() -> Result<Command, String> {
     }
 
     let exe = std::env::current_exe().map_err(|e| e.to_string())?;
-    let name = if cfg!(windows) { "aieditor-engine.exe" } else { "aieditor-engine" };
+    let name = if cfg!(windows) { "framewise-engine.exe" } else { "framewise-engine" };
     let sidecar = exe
         .parent()
         .ok_or("cannot locate app directory")?
@@ -136,7 +136,7 @@ pub fn run() {
             Ok(())
         })
         .build(tauri::generate_context!())
-        .expect("error while building AIEditor")
+        .expect("error while building Framewise")
         .run(|app, event| {
             if let RunEvent::Exit = event {
                 stop_engine(app);

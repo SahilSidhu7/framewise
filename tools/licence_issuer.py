@@ -1,4 +1,4 @@
-"""Make AIEditor licence keys. Seller-side only: never ship this with the app, never commit the private key.
+"""Make Framewise licence keys. Seller-side only: never ship this with the app, never commit the private key.
 
     python tools/licence_issuer.py keygen                      # once: new signing key + updates the engine's PUBLIC_KEY
     python tools/licence_issuer.py issue --plan pro --to "Name"          # lifetime Pro key

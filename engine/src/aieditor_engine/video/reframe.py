@@ -24,10 +24,13 @@ import numpy as np
 SAMPLE_FPS = 3.0
 SMALL_W = 160
 DEADBAND = 0.07  # the subject may drift this far (fraction of source width) before the crop follows
+from ..paths import env
 
 
 def _face_model() -> Path | None:
-    for base in (os.environ.get("AIEDITOR_MODELS"), os.path.join(os.environ.get("LOCALAPPDATA", ""), "AIEditor", "models")):
+    from ..paths import data_root
+
+    for base in (env("MODELS"), str(data_root() / "models")):
         if base and Path(base).is_dir():
             hits = sorted(Path(base).glob("face_detection_yunet*.onnx"))
             if hits:

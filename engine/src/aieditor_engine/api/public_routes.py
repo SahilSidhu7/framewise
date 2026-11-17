@@ -2,7 +2,7 @@
 
 Auth: `Authorization: Bearer aie_...` (or `X-API-Key`). The desktop app's
 engine token is also accepted and has every scope. Keys are created with
-`aieditor keys create NAME` or POST /v1/keys (admin scope).
+`framewise keys create NAME` or POST /v1/keys (admin scope).
 
 Typical flow:
     PUT  /v1/files?name=talk.mp4        (raw bytes)          -> {"file_id": "f_..."}
@@ -75,7 +75,7 @@ def register(app: FastAPI, manager: JobManager, engine_token: str | None) -> Non
 
     @app.get("/v1", tags=tags)
     def v1_info() -> dict[str, Any]:
-        return {"name": "AIEditor automation API", "version": __version__, "docs": "/docs", "openapi": "/openapi.json",
+        return {"name": "Framewise automation API", "version": __version__, "docs": "/docs", "openapi": "/openapi.json",
                 "recipes": list(R.RECIPES)}
 
     @app.get("/v1/me", tags=tags)
@@ -205,5 +205,5 @@ def register(app: FastAPI, manager: JobManager, engine_token: str | None) -> Non
     @app.get("/v1/webhooks/secret", tags=tags)
     def webhook_secret(_: Caller = admin_scope) -> dict[str, str]:
         """Secret that signs webhooks for jobs that do not set their own."""
-        return {"secret": manager.keys.webhook_secret(), "header": "X-AIEditor-Signature",
+        return {"secret": manager.keys.webhook_secret(), "header": "X-Framewise-Signature",
                 "scheme": "t=<unix>,v1=hex(HMAC_SHA256(secret, '<t>.' + raw_body))"}

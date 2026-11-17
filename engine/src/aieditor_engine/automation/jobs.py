@@ -424,7 +424,7 @@ class JobManager:
         folder.mkdir(parents=True, exist_ok=True)
         url = ref.url or ""
         dst = folder / f"{len(list(folder.iterdir())) + 1}_{safe_name(urllib.parse.urlsplit(url).path, 'download')}"
-        req = urllib.request.Request(url, headers={"User-Agent": "AIEditor/1"})
+        req = urllib.request.Request(url, headers={"User-Agent": "Framewise/1"})
         size = 0
         with urllib.request.urlopen(req, timeout=60) as resp, dst.open("wb") as f:  # noqa: S310 - scheme checked in submit
             while chunk := resp.read(1 << 20):

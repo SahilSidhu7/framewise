@@ -15,7 +15,8 @@ def licence_config(tmp_path_factory: pytest.TempPathFactory, monkeypatch: pytest
     from aieditor_engine.licence import LicenceStore
 
     folder = tmp_path_factory.mktemp("config")
-    monkeypatch.setenv("AIEDITOR_CONFIG", str(folder))
+    monkeypatch.setenv("FRAMEWISE_CONFIG", str(folder))
+    monkeypatch.delenv("AIEDITOR_CONFIG", raising=False)
     monkeypatch.delenv("AIEDITOR_LICENSE", raising=False)
     monkeypatch.delenv("AIEDITOR_LICENCE", raising=False)
     LicenceStore(folder).start_trial()

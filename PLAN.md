@@ -1,4 +1,4 @@
-# AIEditor: plan for a local AI photo and video editor
+# Framewise: plan for a local AI photo and video editor
 
 **Product:** a public, beginner-first photo and video editor. A user with no editing experience drops in media and types a request, for example:
 - "make a collage"
@@ -346,7 +346,7 @@ Before release, re-verify every license and keep a `THIRD_PARTY_LICENSES` file.
 
 ## 11. Repository layout
 ```
-AIEditor/
+Framewise/
 ├─ app/                 # Tauri + React (simple/, advanced/, viewer/, timeline/, chat/)
 ├─ engine/
 │  ├─ core/             # project model, command bus, undo, autosave, trajectory recorder
@@ -376,7 +376,7 @@ AIEditor/
 | Video v1 | Timeline compositor, transitions, audio mix, captions (whisper), AI director, export, video editor UI | done |
 | A1 | Layered compositor: transforms, opacity, blend modes, crop, keyframes, track mute/hide/lock, markers, schema v2 | done |
 | C + C+ | Highlights, auto-reframe, pause/filler cutting, reels; style + output options next to every prompt; "edit like this" | done |
-| D | Automation: `aieditor serve` headless API (/v1 jobs, uploads, long-poll, results), hashed scoped API keys, HMAC webhooks with retries, 7 recipes, CLI, watch folders, MCP server, n8n community node + HTTP-only template | done (n8n node and HTTP template tested in n8n 2.47.7) |
+| D | Automation: `framewise serve` headless API (/v1 jobs, uploads, long-poll, results), hashed scoped API keys, HMAC webhooks with retries, 7 recipes, CLI, watch folders, MCP server, n8n community node + HTTP-only template | done (n8n node and HTTP template tested in n8n 2.47.7) |
 
 ### 12.2 Gap analysis: what the product goal still needs
 Goal: usable by a 10-year-old with professional-looking results, automatic highlights and reels, drivable by n8n and similar tools, a layered movie timeline, then superpower VFX.
@@ -447,8 +447,8 @@ A do-everything editor cannot beat CapCut, Adobe or free DaVinci Resolve head-on
 ---
 
 ## 15. Next steps (R1: first public release)
-1. ~~Pro licence check~~ done: offline Ed25519 keys (`aieditor licence`, `/licence`, `tools/licence_issuer.py`), 14-day trial, gating serve, watch folders, batches, webhooks and several reels. Still to do: issue keys automatically on purchase (merchant-of-record webhook to a small issuer on the home server) and a Pro screen in the app.
+1. ~~Pro licence check~~ done: offline Ed25519 keys (`framewise licence`, `/licence`, `tools/licence_issuer.py`), 14-day trial, gating serve, watch folders, batches, webhooks and several reels. Still to do: issue keys automatically on purchase (merchant-of-record webhook to a small issuer on the home server) and a Pro screen in the app.
 2. Publish the n8n community node to npm and the workflow templates to n8n.io (both tested in n8n 2.47.7).
-3. Windows installer: ~~unsigned NSIS installer with the frozen engine and the `aieditor` command~~ done (tested: silent install, CLI, uninstall keeps data). Still to do: code signing, bundling whisper.cpp + first-run model downloader, an install folder separate from the data folder (both are %LOCALAPPDATA%\AIEditor today; safe, but untidy). Installed app window checked by hand: opens fine.
+3. Windows installer: ~~unsigned NSIS installer with the frozen engine and the `framewise` command~~ done (tested: silent install, CLI, uninstall keeps data). Still to do: code signing, bundling whisper.cpp + first-run model downloader, an install folder separate from the data folder (both are %LOCALAPPDATA%\Framewise today; safe, but untidy). Installed app window checked by hand: opens fine.
 4. ~~Onboarding + hardware benchmark~~ done: 4-step first run (welcome, PC check with speed test, what you will make, Pro/trial), Pro screen from a badge in the toolbar, `/system`, `/system/benchmark`, `/app/settings`. Still to do: opt-in crash reports.
 5. ~~Leftovers from C~~ done: spoken word highlighted in bold captions, `progress_bar` and `end_card` (DSL, reel options), captions moved off faces and burned-in titles on export (video/placement.py). Limits: without the YuNet model faces come from skin colour; a caption that starts while a title is fading out can still overlap it.

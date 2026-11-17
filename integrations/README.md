@@ -1,16 +1,16 @@
-# Automating AIEditor
+# Automating Framewise
 
 Everything runs on your own computer. Start the engine without the desktop app:
 
 ```bash
-aieditor serve                 # http://127.0.0.1:8765, interactive docs at /docs
+framewise serve                 # http://127.0.0.1:8765, interactive docs at /docs
 ```
 
-`serve`, watch folders, batches, webhooks and several reels per video need Pro: `aieditor licence trial` (14 days,
-once) or `aieditor licence activate KEY`. One-shot commands and MCP work without it, with limits.
+`serve`, watch folders, batches, webhooks and several reels per video need Pro: `framewise licence trial` (14 days,
+once) or `framewise licence activate KEY`. One-shot commands and MCP work without it, with limits.
 
 The first start creates an API key and prints it once. Make more with
-`aieditor keys create NAME [--scope jobs] [--scope local] [--scope admin]`.
+`framewise keys create NAME [--scope jobs] [--scope local] [--scope admin]`.
 
 | Scope | Allows |
 |---|---|
@@ -50,20 +50,20 @@ curl -O "http://127.0.0.1:8765/v1/jobs/j_.../files/reel_1.mp4" -H "Authorization
 
 Inputs can be uploaded file ids, `http(s)` URLs (downloaded by the engine), or paths (`local` scope).
 `DELETE /v1/jobs/{id}` cancels a running job or deletes a finished one. Finished jobs and uploads are
-removed after 7 days (`aieditor serve --keep-days N`).
+removed after 7 days (`framewise serve --keep-days N`).
 
 ## Webhooks
 
 When a job finishes, the engine POSTs `{"event": "job.done" | "job.failed" | "job.cancelled", "job": {...}}` with
-`X-AIEditor-Signature: t=<unix>,v1=<hex>` where `v1 = HMAC_SHA256(secret, "<t>." + raw body)`.
-The secret is the job's `webhook.secret`, or the engine's (`aieditor keys secret`). Failed deliveries are
+`X-Framewise-Signature: t=<unix>,v1=<hex>` where `v1 = HMAC_SHA256(secret, "<t>." + raw body)`.
+The secret is the job's `webhook.secret`, or the engine's (`framewise keys secret`). Failed deliveries are
 retried after 2, 10 and 30 s. Verify it over the **raw** body. In n8n: turn on the Webhook node's
 *Raw Body* option, allow `crypto` (`NODE_FUNCTION_ALLOW_BUILTIN=crypto`), then in a Code node:
 
 ```js
 const crypto = require('crypto');
 const raw = await this.helpers.getBinaryDataBuffer(0, 'data');
-const [t, v1] = $input.first().json.headers['x-aieditor-signature'].split(',').map(p => p.split('=')[1]);
+const [t, v1] = $input.first().json.headers['x-framewise-signature'].split(',').map(p => p.split('=')[1]);
 const mac = crypto.createHmac('sha256', $env.AIEDITOR_WEBHOOK_SECRET).update(`${t}.`).update(raw).digest('hex');
 if (mac !== v1 || Math.abs(Date.now() / 1000 - Number(t)) > 300) throw new Error('bad signature');
 return [{ json: JSON.parse(raw.toString('utf8')) }];
@@ -79,7 +79,7 @@ return [{ json: JSON.parse(raw.toString('utf8')) }];
   `N8N_BLOCK_ENV_ACCESS_IN_NODE=false` and add your input and output folders to `N8N_RESTRICT_FILE_ACCESS_TO`
   (separated by `;`). It asks for 3 reels of 30 s; a short video gives fewer, since each reel needs its own
   strong moment.
-- **Community node:** [`n8n-nodes-aieditor`](n8n-nodes-aieditor) adds an *AIEditor* node (Make Reels, Find
+- **Community node:** [`n8n-nodes-framewise`](n8n-nodes-framewise) adds an *Framewise* node (Make Reels, Find
   Highlights, Add Captions, Edit Video, Edit Photo, Render Program, Transcribe, Get Job, Cancel Job) that uploads
   binary data from the previous node, waits, and returns the results as binary `file_1..n`.
   Build: `npm install && npm run build`, then install the folder in n8n (Settings > Community nodes, or
@@ -91,12 +91,12 @@ return [{ json: JSON.parse(raw.toString('utf8')) }];
 ## Command line
 
 ```bash
-aieditor reel talk.mp4 --platform tiktok --set count=3 --out shorts/
-aieditor edit a.mp4 b.mp4 song.mp3 --prompt "fun travel recap" --style travel --versions 2
-aieditor photo *.jpg --style food --platform instagram_post
-aieditor captions talk.mp4 --set style=boxed
-aieditor render a.mp4 --program edit.vdsl
-aieditor transcribe interview.mp4
+framewise reel talk.mp4 --platform tiktok --set count=3 --out shorts/
+framewise edit a.mp4 b.mp4 song.mp3 --prompt "fun travel recap" --style travel --versions 2
+framewise photo *.jpg --style food --platform instagram_post
+framewise captions talk.mp4 --set style=boxed
+framewise render a.mp4 --program edit.vdsl
+framewise transcribe interview.mp4
 ```
 
 One-shot commands run without a server and print a JSON summary (with the result paths) on stdout.
@@ -104,12 +104,12 @@ One-shot commands run without a server and print a JSON summary (with the result
 ## Watch folders
 
 ```bash
-aieditor watch ~/Videos/inbox --recipe reel --platform tiktok
-aieditor serve --watch ~/Videos/inbox            # or together with the API
+framewise watch ~/Videos/inbox --recipe reel --platform tiktok
+framewise serve --watch ~/Videos/inbox            # or together with the API
 ```
 
 Each new file (once it stops growing) is processed; results go to `inbox/output/<file name>/`, errors to
-`error.txt` there. Put an `aieditor-watch.yaml` in the folder to choose the recipe and options:
+`error.txt` there. Put an `framewise-watch.yaml` in the folder to choose the recipe and options:
 
 ```yaml
 recipe: reel
@@ -121,13 +121,13 @@ options: {count: 3}
 ## AI agents (MCP)
 
 ```json
-{"mcpServers": {"aieditor": {"command": "aieditor", "args": ["mcp"]}}}
+{"mcpServers": {"framewise": {"command": "framewise", "args": ["mcp"]}}}
 ```
 
 Tools: `list_recipes`, `list_styles`, `run_recipe` (local paths in, local paths out), `get_job`, `cancel_job`.
 
 ## Network use
 
-`aieditor serve` only listens on 127.0.0.1. `--host 0.0.0.0 --allow-lan` opens it to your network (with a
+`framewise serve` only listens on 127.0.0.1. `--host 0.0.0.0 --allow-lan` opens it to your network (with a
 warning). Give other machines keys without the `local` scope, and never expose the port to the internet
 directly; use a tunnel that adds its own authentication.

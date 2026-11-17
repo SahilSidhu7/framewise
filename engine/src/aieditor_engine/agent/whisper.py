@@ -25,6 +25,7 @@ import numpy as np
 from ..video.audio import decode_audio
 from .llm import app_data_root
 
+from ..paths import env
 log = logging.getLogger(__name__)
 MODEL_PREFERENCE = ("ggml-small", "ggml-base", "ggml-tiny")
 
@@ -34,9 +35,9 @@ class WhisperUnavailable(RuntimeError):
 
 
 def find_whisper() -> Path | None:
-    env = os.environ.get("AIEDITOR_WHISPER")
-    if env and Path(env).is_file():
-        return Path(env)
+    value = env("WHISPER")
+    if value and Path(value).is_file():
+        return Path(value)
     exe = "whisper-cli.exe" if sys.platform == "win32" else "whisper-cli"
     runtime = app_data_root() / "runtime"
     if runtime.is_dir():
@@ -46,9 +47,9 @@ def find_whisper() -> Path | None:
 
 
 def find_whisper_model() -> Path | None:
-    env = os.environ.get("AIEDITOR_WHISPER_MODEL")
-    if env and Path(env).is_file():
-        return Path(env)
+    value = env("WHISPER_MODEL")
+    if value and Path(value).is_file():
+        return Path(value)
     models = app_data_root() / "models"
     if not models.is_dir():
         return None
@@ -84,7 +85,7 @@ def transcribe(media_path: Path, language: str = "auto", timeout: float = 900) -
     audio = decode_audio(media_path, 16000, mono=True)
     if audio.size == 0:
         return {"language": None, "words": [], "segments": []}
-    with tempfile.TemporaryDirectory(prefix="aieditor-asr-") as tmp:
+    with tempfile.TemporaryDirectory(prefix="framewise-asr-") as tmp:
         wav = Path(tmp) / "audio.wav"
         _write_wav(wav, audio[0])
         out_base = Path(tmp) / "out"

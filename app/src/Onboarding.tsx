@@ -91,7 +91,7 @@ export function Onboarding({ client, licence, onLicence, onDone }: Props) {
         </button>
       ) : (
         <button className={licence?.pro ? "primary" : ""} disabled={saving} onClick={finish}>
-          {licence?.pro ? "Open AIEditor" : "Continue with Free"}
+          {licence?.pro ? "Open Framewise" : "Continue with Free"}
         </button>
       )}
     </>

@@ -7,15 +7,15 @@ from pathlib import Path
 
 
 def automation_home(override: Path | str | None = None) -> Path:
-    """AIEDITOR_HOME, else %LOCALAPPDATA%/AIEditor/automation, else ~/.aieditor/automation."""
+    """--home, else FRAMEWISE_HOME, else <data folder>/automation."""
+    from ..paths import data_root, env
+
     if override:
         base = Path(override)
-    elif os.environ.get("AIEDITOR_HOME"):
-        base = Path(os.environ["AIEDITOR_HOME"])
-    elif os.environ.get("LOCALAPPDATA"):
-        base = Path(os.environ["LOCALAPPDATA"]) / "AIEditor" / "automation"
+    elif env("HOME"):
+        base = Path(env("HOME"))  # type: ignore[arg-type]
     else:
-        base = Path.home() / ".aieditor" / "automation"
+        base = data_root() / "automation"
     base = base.expanduser()
     for sub in ("jobs", "uploads", "cache"):
         (base / sub).mkdir(parents=True, exist_ok=True)

@@ -1,7 +1,7 @@
 """MCP server (Model Context Protocol, stdio) so AI agents can drive the editor.
 
 Add to an MCP client config, e.g.
-    {"mcpServers": {"aieditor": {"command": "aieditor", "args": ["mcp"]}}}
+    {"mcpServers": {"framewise": {"command": "framewise", "args": ["mcp"]}}}
 
 Tools: list_recipes, list_styles, run_recipe, get_job, cancel_job. Files are
 local paths (the agent runs on this computer); results are local paths too.
@@ -101,7 +101,7 @@ class McpServer:
             if method == "initialize":
                 result: Any = {"protocolVersion": params.get("protocolVersion") or PROTOCOL,
                                "capabilities": {"tools": {"listChanged": False}},
-                               "serverInfo": {"name": "aieditor", "version": __version__}}
+                               "serverInfo": {"name": "framewise", "version": __version__}}
             elif method == "ping":
                 result = {}
             elif method == "tools/list":

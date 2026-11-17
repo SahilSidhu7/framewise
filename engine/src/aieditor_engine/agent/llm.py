@@ -3,7 +3,7 @@
 Located via env vars or the per-user app data folder:
   AIEDITOR_LLAMA_SERVER  path to llama-server(.exe)
   AIEDITOR_MODEL         path to a .gguf model
-default root: %LOCALAPPDATA%/AIEditor (Windows) or ~/.local/share/AIEditor
+default root: %LOCALAPPDATA%/Framewise (Windows) or ~/.local/share/Framewise
   runtime/llama-*/llama-server(.exe)
   models/*.gguf   (first match of MODEL_PREFERENCE wins)
 
@@ -28,32 +28,31 @@ import urllib.request
 from pathlib import Path
 from typing import Any
 
+from ..paths import env
 log = logging.getLogger(__name__)
 
 MODEL_PREFERENCE = ("EditLM", "Qwen3-1.7B", "Qwen3-0.6B", "Qwen3-4B")
 
 
 def app_data_root() -> Path:
-    if sys.platform == "win32":
-        return Path(os.environ.get("LOCALAPPDATA", Path.home() / "AppData" / "Local")) / "AIEditor"
-    if sys.platform == "darwin":
-        return Path.home() / "Library" / "Application Support" / "AIEditor"
-    return Path(os.environ.get("XDG_DATA_HOME", Path.home() / ".local" / "share")) / "AIEditor"
+    from ..paths import data_root
+
+    return data_root()
 
 
 def find_server() -> Path | None:
-    env = os.environ.get("AIEDITOR_LLAMA_SERVER")
-    if env:
-        return Path(env) if Path(env).is_file() else None
+    value = env("LLAMA_SERVER")
+    if value:
+        return Path(value) if Path(value).is_file() else None
     exe = "llama-server.exe" if sys.platform == "win32" else "llama-server"
     candidates = sorted((app_data_root() / "runtime").glob(f"llama-*/**/{exe}"), reverse=True)
     return candidates[0] if candidates else None
 
 
 def find_model() -> Path | None:
-    env = os.environ.get("AIEDITOR_MODEL")
-    if env:
-        return Path(env) if Path(env).is_file() else None
+    value = env("MODEL")
+    if value:
+        return Path(value) if Path(value).is_file() else None
     models = list((app_data_root() / "models").glob("*.gguf"))
     for prefix in MODEL_PREFERENCE:
         for m in sorted(models):

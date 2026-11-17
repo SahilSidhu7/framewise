@@ -61,7 +61,7 @@ def watch_parent(pid: int, interval: float = 2.0) -> None:
 
 
 def main(argv: list[str] | None = None) -> None:
-    parser = argparse.ArgumentParser(prog="aieditor-engine")
+    parser = argparse.ArgumentParser(prog="framewise-engine")
     parser.add_argument("--port", type=int, default=0, help="0 = pick a free port")
     parser.add_argument("--log-level", default="info")
     args = parser.parse_args(argv)

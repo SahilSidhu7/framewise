@@ -139,7 +139,7 @@ class EngineState:
 
 
 def create_app(token: str | None = None, automation: JobManager | None = None) -> FastAPI:
-    """automation: when given, the public /v1 job API is mounted (headless `aieditor serve`)."""
+    """automation: when given, the public /v1 job API is mounted (headless `framewise serve`)."""
     token = token or secrets.token_urlsafe(32)
     state = EngineState()
 
@@ -151,7 +151,7 @@ def create_app(token: str | None = None, automation: JobManager | None = None) -
         if automation is not None:
             automation.shutdown()
 
-    app = FastAPI(title="AIEditor Engine", version=__version__, lifespan=lifespan)
+    app = FastAPI(title="Framewise Engine", version=__version__, lifespan=lifespan)
     app.state.token = token
     app.state.engine = state
     app.add_middleware(

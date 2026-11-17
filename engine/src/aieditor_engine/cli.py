@@ -1,14 +1,14 @@
-"""`aieditor` command line: headless server, one-shot recipes, keys, watch folders, MCP.
+"""`framewise` command line: headless server, one-shot recipes, keys, watch folders, MCP.
 
-    aieditor serve                         # API on http://127.0.0.1:8765 (docs at /docs)
-    aieditor keys create n8n               # prints a key once
-    aieditor reel talk.mp4 --platform tiktok --set count=3 --out shorts/
-    aieditor edit a.mp4 b.mp4 song.mp3 --prompt "fun travel recap" --style travel
-    aieditor photo *.jpg --style food --platform instagram_post
-    aieditor captions talk.mp4 --set style=boxed
-    aieditor watch ~/Videos/inbox --recipe reel
-    aieditor mcp                           # MCP server on stdio for AI agents
-    aieditor licence trial | activate KEY  # Pro: API, watch folders, batches, webhooks, several reels
+    framewise serve                         # API on http://127.0.0.1:8765 (docs at /docs)
+    framewise keys create n8n               # prints a key once
+    framewise reel talk.mp4 --platform tiktok --set count=3 --out shorts/
+    framewise edit a.mp4 b.mp4 song.mp3 --prompt "fun travel recap" --style travel
+    framewise photo *.jpg --style food --platform instagram_post
+    framewise captions talk.mp4 --set style=boxed
+    framewise watch ~/Videos/inbox --recipe reel
+    framewise mcp                           # MCP server on stdio for AI agents
+    framewise licence trial | activate KEY  # Pro: API, watch folders, batches, webhooks, several reels
 
 One-shot commands run in this process (no server needed) and print a JSON
 summary with the output paths on stdout; progress goes to stderr.
@@ -41,7 +41,7 @@ def _job_args(p: argparse.ArgumentParser, files: bool = True) -> None:
     if files:
         p.add_argument("files", nargs="+", help="input files, numbered 1..n in this order")
     p.add_argument("--prompt", help="what you want, in plain words")
-    p.add_argument("--style", help="editing style id (aieditor styles)")
+    p.add_argument("--style", help="editing style id (framewise styles)")
     p.add_argument("--platform", help="tiktok, instagram_reel, youtube_short, youtube, instagram_post, ...")
     p.add_argument("--length", type=float, help="target length in seconds")
     p.add_argument("--versions", type=int, help="how many versions (1-5)")
@@ -141,7 +141,7 @@ def cmd_serve(args: argparse.Namespace) -> int:
     for folder in args.watch or []:
         w = FolderWatcher(manager, Path(folder), {"recipe": args.watch_recipe} if args.watch_recipe else None)
         threading.Thread(target=w.run, args=(stop,), daemon=True, name="watch").start()
-    print(f"AIEditor automation API on http://{args.host}:{args.port}  (docs: /docs, data: {manager.home})", file=sys.stderr)
+    print(f"Framewise automation API on http://{args.host}:{args.port}  (docs: /docs, data: {manager.home})", file=sys.stderr)
     try:
         uvicorn.run(create_app(automation=manager), host=args.host, port=args.port, log_level=args.log_level)
     finally:
@@ -181,7 +181,7 @@ def _pro_or_explain(licence: Any, feature: str) -> bool:
         return False
     st = licence.status()
     if st["tier"] == "trial":
-        print(f"AIEditor Pro trial: {st['trial_days_left']} day(s) left.", file=sys.stderr)
+        print(f"Framewise Pro trial: {st['trial_days_left']} day(s) left.", file=sys.stderr)
     return True
 
 
@@ -192,7 +192,7 @@ def cmd_licence(args: argparse.Namespace) -> int:
     try:
         if args.action == "activate":
             if not args.key:
-                print("usage: aieditor licence activate KEY", file=sys.stderr)
+                print("usage: framewise licence activate KEY", file=sys.stderr)
                 return 2
             st = store.activate(args.key)
         elif args.action == "trial":
@@ -234,8 +234,8 @@ def cmd_keys(args: argparse.Namespace) -> int:
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(prog="aieditor", description="AIEditor automation: headless API, recipes, watch folders, MCP.")
-    parser.add_argument("--home", help="automation data folder (default: %%LOCALAPPDATA%%/AIEditor/automation or $AIEDITOR_HOME)")
+    parser = argparse.ArgumentParser(prog="framewise", description="Framewise automation: headless API, recipes, watch folders, MCP.")
+    parser.add_argument("--home", help="automation data folder (default: %%LOCALAPPDATA%%/Framewise/automation or $AIEDITOR_HOME)")
     parser.add_argument("--log-level", default="warning")
     sub = parser.add_subparsers(dest="cmd", required=True)
 
@@ -246,7 +246,7 @@ def main(argv: list[str] | None = None) -> int:
     s.add_argument("--workers", type=int, default=1)
     s.add_argument("--keep-days", type=float, default=7, help="delete finished jobs and uploads after this many days")
     s.add_argument("--watch", action="append", metavar="DIR", help="also watch this folder (repeatable)")
-    s.add_argument("--watch-recipe", help="recipe for watched folders without aieditor-watch.yaml")
+    s.add_argument("--watch-recipe", help="recipe for watched folders without framewise-watch.yaml")
 
     r = sub.add_parser("run", help="run any recipe once")
     r.add_argument("recipe")
@@ -255,7 +255,7 @@ def main(argv: list[str] | None = None) -> int:
         sp = sub.add_parser(name, help=f"run the {recipe} recipe once")
         _job_args(sp)
     for sp in [r, *(sub.choices[n] for n in SHORTCUTS)]:
-        sp.add_argument("--out", default="aieditor-output", help="folder for the results")
+        sp.add_argument("--out", default="framewise-output", help="folder for the results")
         sp.add_argument("--keep", action="store_true", help="keep the job in the automation folder too")
         sp.add_argument("--quiet", action="store_true")
 

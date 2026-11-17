@@ -6,7 +6,7 @@ The engine only holds the public key, so it can check keys but not make them; ke
 ``tools/licence_issuer.py`` and the private key that never leaves the seller's machine.
 
 Free tier: the whole desktop editor, and one-shot automation (CLI / MCP) with limits. Pro (or a
-14-day trial) unlocks the headless API (`aieditor serve`), watch folders, batches, webhooks and
+14-day trial) unlocks the headless API (`framewise serve`), watch folders, batches, webhooks and
 several reels per video.
 
 Ed25519 is implemented here in pure Python (RFC 8032, section 6) so the engine needs no crypto
@@ -27,7 +27,7 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
 
-# Public half of the AIEditor licence signing key. The private half is kept outside the repository.
+# Public half of the Framewise licence signing key. The private half is kept outside the repository.
 PUBLIC_KEY = "8853ce4b93fb60e9a88db36493717416bdb83f5991e4a4988b5e2d46cefef349"
 
 PREFIX = "AIE1-"
@@ -40,6 +40,7 @@ _P = 2**255 - 19
 _L = 2**252 + 27742317777372353535851937790883648493
 _D = -121665 * pow(121666, _P - 2, _P) % _P
 _I = pow(2, (_P - 1) // 4, _P)
+from .paths import env
 
 
 def _sha512(b: bytes) -> bytes:
@@ -153,12 +154,12 @@ class LicenceRequired(PermissionError):
     def __init__(self, feature: str) -> None:
         self.feature = feature
         super().__init__(
-            f"{FEATURES.get(feature, feature)} needs AIEditor Pro. Start a free {TRIAL_DAYS}-day trial with "
-            "`aieditor licence trial`, or activate a key with `aieditor licence activate KEY`.")
+            f"{FEATURES.get(feature, feature)} needs Framewise Pro. Start a free {TRIAL_DAYS}-day trial with "
+            "`framewise licence trial`, or activate a key with `framewise licence activate KEY`.")
 
 
 FEATURES = {
-    "serve": "The automation API (aieditor serve)",
+    "serve": "The automation API (framewise serve)",
     "watch": "Watch folders",
     "batch": "Editing several photos in one job",
     "webhook": "Webhooks",
@@ -196,7 +197,7 @@ def parse(key: str, public: str | None = None) -> Licence:
     """Check a key's signature and fields. Raises LicenceError; does not check expiry."""
     key = "".join(key.split())  # tolerate line breaks and spaces from copy/paste
     if not key.startswith(PREFIX) or key.count(".") != 1:
-        raise LicenceError("not an AIEditor licence key")
+        raise LicenceError("not an Framewise licence key")
     body_s, sig_s = key[len(PREFIX):].split(".")
     try:
         body, sig = _b64d(body_s), _b64d(sig_s)
@@ -211,20 +212,16 @@ def parse(key: str, public: str | None = None) -> Licence:
     except (ValueError, KeyError, TypeError) as exc:
         raise LicenceError("licence key has unreadable data") from exc
     if d.get("v") != 1 or lic.plan not in PLANS:
-        raise LicenceError("licence key is for a different version of AIEditor")
+        raise LicenceError("licence key is for a different version of Framewise")
     return lic
 
 
 # ---------------------------------------------------------------- store
 def config_dir() -> Path:
-    """AIEDITOR_CONFIG, else %LOCALAPPDATA%/AIEditor, else ~/.aieditor (shared by the app and the CLI)."""
-    if os.environ.get("AIEDITOR_CONFIG"):
-        base = Path(os.environ["AIEDITOR_CONFIG"])
-    elif os.environ.get("LOCALAPPDATA"):
-        base = Path(os.environ["LOCALAPPDATA"]) / "AIEditor"
-    else:
-        base = Path.home() / ".aieditor"
-    base = base.expanduser()
+    """FRAMEWISE_CONFIG, else the data folder (paths.data_root); shared by the app and the CLI."""
+    from .paths import data_root, env
+
+    base = Path(env("CONFIG")).expanduser() if env("CONFIG") else data_root()
     base.mkdir(parents=True, exist_ok=True)
     return base
 
@@ -285,7 +282,7 @@ class LicenceStore:
     def status(self, now: float | None = None) -> dict[str, Any]:
         now = now or time.time()
         data = self._read()
-        key = os.environ.get("AIEDITOR_LICENSE") or os.environ.get("AIEDITOR_LICENCE") or data.get("key")
+        key = env("LICENSE") or env("LICENCE") or data.get("key")
         out: dict[str, Any] = {"tier": "free", "pro": False, "licence": None, "trial_days_left": None, "problem": None}
         if key:
             try:

@@ -49,7 +49,7 @@ def apply_lut3d(img: np.ndarray, table: np.ndarray) -> np.ndarray:
     return (c0 * (1 - fb) + c1 * fb).astype(np.float32)
 
 
-def write_cube(path: Path, table: np.ndarray, title: str = "AIEditor") -> None:
+def write_cube(path: Path, table: np.ndarray, title: str = "Framewise") -> None:
     n = table.shape[0]
     lines = [f'TITLE "{title}"', f"LUT_3D_SIZE {n}"]
     for b in range(n):

@@ -2,15 +2,15 @@
 
 Every new media file that appears in the folder (and has stopped growing) is
 sent through a recipe; results land in `<folder>/output/<file name>/`.
-The recipe comes from `aieditor-watch.yaml` in the folder, e.g.
+The recipe comes from `framewise-watch.yaml` in the folder, e.g.
 
     recipe: reel
     style: energetic_reel
     output: {platform: tiktok, length: 30}
     options: {count: 3}
 
-or from the command line (`aieditor watch DIR --recipe captions`).
-Processed files are remembered in `.aieditor-watch.json`, so restarting the
+or from the command line (`framewise watch DIR --recipe captions`).
+Processed files are remembered in `.framewise-watch.json`, so restarting the
 watcher does not redo them.
 """
 
@@ -30,8 +30,8 @@ log = logging.getLogger(__name__)
 
 MEDIA_EXTS = {".mp4", ".mov", ".m4v", ".mkv", ".webm", ".avi", ".mts", ".m2ts", ".jpg", ".jpeg", ".png", ".webp",
               ".heic", ".tif", ".tiff", ".mp3", ".wav", ".m4a", ".aac", ".flac", ".ogg"}
-CONFIG = "aieditor-watch.yaml"
-STATE = ".aieditor-watch.json"
+CONFIG = "framewise-watch.yaml"
+STATE = ".framewise-watch.json"
 OUTPUT = "output"
 
 

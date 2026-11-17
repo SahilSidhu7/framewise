@@ -1,4 +1,4 @@
-# AIEditor
+# Framewise
 
 A local, beginner-first AI photo and video editor. See [PLAN.md](PLAN.md) for the full design and roadmap.
 
@@ -37,7 +37,7 @@ A local, beginner-first AI photo and video editor. See [PLAN.md](PLAN.md) for th
   - export dialog
 
 ## Local AI model setup
-The engine looks in `%LOCALAPPDATA%\AIEditor` (or the `AIEDITOR_LLAMA_SERVER` and `AIEDITOR_MODEL` env vars) for:
+The engine looks in `%LOCALAPPDATA%\Framewise` (or the `AIEDITOR_LLAMA_SERVER` and `AIEDITOR_MODEL` env vars) for:
 ```
 runtime/llama-<build>/llama-server.exe   # llama.cpp release zip, e.g. llama-bXXXXX-bin-win-vulkan-x64.zip
 models/Qwen3-1.7B-Q8_0.gguf              # huggingface.co/Qwen/Qwen3-1.7B-GGUF (Apache-2.0)
@@ -84,27 +84,27 @@ In debug builds the shell starts `engine/.venv`'s Python automatically. To use a
 cd engine && uv run --group build python scripts/build_sidecar.py
 cd ../app && npx tauri build --config src-tauri/tauri.bundle.conf.json
 ```
-Output: `app/src-tauri/target/release/bundle/nsis/AIEditor_<version>_x64-setup.exe` (about 105 MB, per-user install,
-no admin rights). The engine is one frozen binary (`aieditor-engine.exe`, starts in about 3 s) that the app launches;
-called with a command (`aieditor-engine.exe reel ...` or `... cli ...`) it is the `aieditor` command line, and the
-installer drops an `aieditor.cmd` launcher into `%LOCALAPPDATA%\Microsoft\WindowsApps` (already on PATH) so
-`aieditor` works in any terminal. Uninstalling removes the program files and that launcher, never the user's
+Output: `app/src-tauri/target/release/bundle/nsis/Framewise_<version>_x64-setup.exe` (about 105 MB, per-user install,
+no admin rights). The engine is one frozen binary (`framewise-engine.exe`, starts in about 3 s) that the app launches;
+called with a command (`framewise-engine.exe reel ...` or `... cli ...`) it is the `framewise` command line, and the
+installer drops an `framewise.cmd` launcher into `%LOCALAPPDATA%\Microsoft\WindowsApps` (already on PATH) so
+`framewise` works in any terminal. Uninstalling removes the program files and that launcher, never the user's
 models, licence or jobs. The installer is not code-signed yet, so Windows SmartScreen will warn.
 
 ## Automation (n8n, scripts, AI agents)
 ```bash
-aieditor serve                                   # headless API on 127.0.0.1:8765, docs at /docs
-aieditor reel talk.mp4 --platform tiktok --set count=3 --out shorts/
-aieditor watch ~/Videos/inbox --recipe captions  # drop files in, get results out
-aieditor mcp                                     # MCP server for AI agents
+framewise serve                                   # headless API on 127.0.0.1:8765, docs at /docs
+framewise reel talk.mp4 --platform tiktok --set count=3 --out shorts/
+framewise watch ~/Videos/inbox --recipe captions  # drop files in, get results out
+framewise mcp                                     # MCP server for AI agents
 ```
 Public job API under `/v1` (API keys, uploads, jobs, long-poll, signed webhooks), recipes `reel`, `highlights`,
 `captions`, `video_edit`, `photo_edit`, `render_program`, `transcribe`. See [integrations/README.md](integrations/README.md)
 for the HTTP API, webhooks, the n8n node and template, watch folders and MCP.
 
-**Free vs Pro.** The desktop editor is free. One-shot `aieditor` commands and MCP are free with limits (one reel per
-video, one photo per job, no webhooks). Pro unlocks `aieditor serve`, watch folders, batches, webhooks and up to 10
-reels per video. `aieditor licence trial` starts a 14-day trial once; `aieditor licence activate KEY` adds a key
+**Free vs Pro.** The desktop editor is free. One-shot `framewise` commands and MCP are free with limits (one reel per
+video, one photo per job, no webhooks). Pro unlocks `framewise serve`, watch folders, batches, webhooks and up to 10
+reels per video. `framewise licence trial` starts a 14-day trial once; `framewise licence activate KEY` adds a key
 (or set `AIEDITOR_LICENSE` on servers and in containers). Keys are Ed25519-signed and checked offline; the app also
 exposes `GET/POST/DELETE /licence`. Keys are made with `tools/licence_issuer.py` and a private key that stays
 outside this repository.
@@ -129,7 +129,7 @@ outside this repository.
 Every command, from a person or the AI, is appended to `logs/trajectory.jsonl` in the project folder. That log is EditLM training data.
 
 ## Website and architecture
-- `site/`: the public landing page, a static site on Cloudflare Pages (project `aieditor`, https://aieditor-1me.pages.dev).
-  Deploy with `npx wrangler pages deploy site --project-name aieditor --branch main`.
+- `site/`: the public landing page, a static site on Cloudflare Pages (project `framewise`, https://framewise-7qq.pages.dev).
+  Deploy with `npx wrangler pages deploy site --project-name framewise --branch main`.
 - `docs/architecture.html`: low-level design tour (components, data model, flows, rendering, caption placement,
   jobs, licensing, installer) with Mermaid diagrams.

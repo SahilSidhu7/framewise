@@ -23,7 +23,7 @@ const HINT: Record<Focus, string> = {
   videos: "Add your clips, then describe the video you want.",
   reels: "Import a long video, then use Make reels.",
   photos: "Add pictures, then describe the look you want.",
-  automation: "Automation runs from the aieditor command and aieditor serve. You can still edit here.",
+  automation: "Automation runs from the framewise command and framewise serve. You can still edit here.",
 };
 
 const KINDS: { id: Project["kind"]; title: string; text: string }[] = [

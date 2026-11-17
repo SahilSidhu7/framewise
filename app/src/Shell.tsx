@@ -4,7 +4,7 @@ export function Logo({ size = 22, word = true }: { size?: number; word?: boolean
   return (
     <span className="logo">
       <img src="/glyph.svg" width={size} height={size} alt="" />
-      {word && <span className="logo-word">AIEditor</span>}
+      {word && <span className="logo-word">Framewise</span>}
     </span>
   );
 }

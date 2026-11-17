@@ -1,7 +1,7 @@
 [project]
 name = "aieditor-engine"
 version = "0.1.0"
-description = "AIEditor engine: project model, command bus, media pipeline, local API"
+description = "Framewise engine: project model, command bus, media pipeline, local API"
 requires-python = ">=3.12"
 dependencies = [
     "fastapi>=0.115",
@@ -15,8 +15,9 @@ dependencies = [
 ]
 
 [project.scripts]
-aieditor-engine = "aieditor_engine.__main__:main"
-aieditor = "aieditor_engine.cli:main"
+framewise-engine = "aieditor_engine.__main__:main"
+framewise = "aieditor_engine.cli:main"
+fw = "aieditor_engine.cli:main"
 
 [dependency-groups]
 dev = [

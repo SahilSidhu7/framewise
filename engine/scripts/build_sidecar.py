@@ -1,6 +1,6 @@
 """Freeze the engine into a single binary for the Tauri bundle.
 
-Output: app/src-tauri/binaries/aieditor-engine-<rust target triple>[.exe]
+Output: app/src-tauri/binaries/framewise-engine-<rust target triple>[.exe]
 (Tauri's externalBin naming), picked up by `tauri build --config
 src-tauri/tauri.bundle.conf.json`.
 
@@ -37,7 +37,7 @@ def main() -> None:
         [
             sys.executable, "-m", "PyInstaller",
             "--noconfirm", "--clean", "--onefile",
-            "--name", "aieditor-engine",
+            "--name", "framewise-engine",
             "--collect-submodules", "aieditor_engine",
             "--collect-data", "aieditor_engine",  # looks (recipes/*.yaml)
             "--collect-all", "av",
@@ -50,8 +50,8 @@ def main() -> None:
     )
     ext = ".exe" if sys.platform == "win32" else ""
     BIN_DIR.mkdir(parents=True, exist_ok=True)
-    dest = BIN_DIR / f"aieditor-engine-{triple}{ext}"
-    shutil.copy2(WORK / "dist" / f"aieditor-engine{ext}", dest)
+    dest = BIN_DIR / f"framewise-engine-{triple}{ext}"
+    shutil.copy2(WORK / "dist" / f"framewise-engine{ext}", dest)
     print(f"sidecar -> {dest}")
 
 
