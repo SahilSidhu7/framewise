@@ -87,6 +87,9 @@ fn start_engine(app: tauri::AppHandle) {
             Err(e) => return fail(e),
         };
         cmd.stdout(Stdio::piped()).stderr(Stdio::inherit()).stdin(Stdio::null());
+        // The frozen engine is a launcher plus a child process; killing the launcher alone would
+        // orphan the child. The engine watches this PID and exits when the app is gone.
+        cmd.env("AIEDITOR_PARENT_PID", std::process::id().to_string());
         #[cfg(windows)]
         {
             use std::os::windows::process::CommandExt;
