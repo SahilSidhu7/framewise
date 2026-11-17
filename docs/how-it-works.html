@@ -1,0 +1,296 @@
+<title>AIEditor Handbook</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: a long-form handbook. Sticky chapter index on the left (wide screens), one reading column,
+   diagrams in framed panels, "status" callouts that separate what exists from what is planned. */
+:root {
+  --bg: #f5f6f8; --panel: #ffffff; --fg: #15181d; --muted: #5b636e; --faint: #8a929c; --line: #dfe3e8;
+  --accent: #c47a12; --accent-soft: #fbf1e1; --ok: #237a4b; --ok-soft: #e6f4ec; --plan: #3d5f8f; --plan-soft: #e8eef7;
+  --display: "Inter Tight", "Segoe UI", system-ui, sans-serif;
+  --body: "Inter", "Segoe UI", system-ui, sans-serif;
+  --mono: "JetBrains Mono", "Cascadia Mono", Consolas, monospace;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #0e0f11; --panel: #16181b; --fg: #e8eaed; --muted: #a4aab3; --faint: #737a84; --line: #2a2e34;
+  --accent: #f2a33a; --accent-soft: #2c2210; --ok: #5cc690; --ok-soft: #13261c; --plan: #8fb4e6; --plan-soft: #172231; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #0e0f11; --panel: #16181b; --fg: #e8eaed; --muted: #a4aab3; --faint: #737a84; --line: #2a2e34;
+  --accent: #f2a33a; --accent-soft: #2c2210; --ok: #5cc690; --ok-soft: #13261c; --plan: #8fb4e6; --plan-soft: #172231; color-scheme: dark }
+
+body { background: var(--bg); color: var(--fg); font: 16px/1.65 var(--body); }
+.wrap { max-width: 1160px; margin: 0 auto; padding-block: 40px 80px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  display: grid; grid-template-columns: 210px minmax(0, 1fr); gap: 48px; }
+nav { position: sticky; top: calc(20px + env(safe-area-inset-top, 0px)); align-self: start; font-size: 13.5px; }
+nav .label { margin-bottom: 10px; }
+nav a { display: block; color: var(--muted); text-decoration: none; padding: 4px 0 4px 12px; border-left: 2px solid var(--line); }
+nav a:hover, nav a:focus-visible { color: var(--fg); border-color: var(--accent); outline: none; }
+main { min-width: 0; display: grid; gap: 64px; }
+.label { font: 500 11.5px var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--faint); margin: 0; }
+h1 { font: 700 clamp(32px, 4.4vw, 48px)/1.08 var(--display); letter-spacing: -0.02em; margin: 10px 0 14px; text-wrap: balance; }
+h2 { font: 700 27px/1.2 var(--display); letter-spacing: -0.015em; margin: 6px 0 12px; text-wrap: balance; }
+h3 { font: 600 18px/1.3 var(--display); margin: 26px 0 8px; }
+p { margin: 0 0 14px; max-width: 70ch; }
+.lede { font-size: 18px; color: var(--muted); max-width: 64ch; }
+code { font: 13.5px var(--mono); background: var(--panel); border: 1px solid var(--line); border-radius: 4px; padding: 1px 5px; }
+pre.code { font: 13px/1.65 var(--mono); background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 14px 16px; overflow-x: auto; margin: 0 0 16px; }
+pre.code .c { color: var(--faint); } pre.code .k { color: var(--accent); }
+.diagram { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 16px; overflow-x: auto; margin: 6px 0 18px; }
+.diagram pre.mermaid { margin: 0; min-width: 620px; background: transparent; }
+.callout { border-radius: 8px; padding: 14px 16px; margin: 4px 0 18px; max-width: 76ch; border: 1px solid transparent; }
+.callout b { font-family: var(--display); }
+.callout.now { background: var(--ok-soft); border-color: color-mix(in srgb, var(--ok) 35%, transparent); }
+.callout.plan { background: var(--plan-soft); border-color: color-mix(in srgb, var(--plan) 35%, transparent); }
+.callout.key { background: var(--accent-soft); border-color: color-mix(in srgb, var(--accent) 35%, transparent); }
+.tag { display: inline-block; font: 600 11px var(--mono); letter-spacing: .05em; padding: 1px 7px; border-radius: 4px; margin-right: 6px; vertical-align: 1px; }
+.tag.now { color: var(--ok); border: 1px solid var(--ok); }
+.tag.plan { color: var(--plan); border: 1px solid var(--plan); }
+ol.steps { list-style: none; margin: 8px 0 18px; padding: 0; counter-reset: s; display: grid; gap: 0; border-top: 1px solid var(--line); max-width: 78ch; }
+ol.steps li { counter-increment: s; display: grid; grid-template-columns: 34px minmax(0, 1fr); gap: 10px; padding: 12px 0; border-bottom: 1px solid var(--line); }
+ol.steps li::before { content: counter(s); font: 500 13px var(--mono); color: var(--accent); padding-top: 2px; }
+ol.steps b { font-family: var(--display); }
+.tablewrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 10px; background: var(--panel); margin: 6px 0 18px; }
+table { width: 100%; border-collapse: collapse; font-size: 14.5px; }
+th, td { text-align: left; padding: 10px 14px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { font: 600 11.5px var(--body); letter-spacing: .05em; text-transform: uppercase; color: var(--faint); }
+tr:last-child td { border-bottom: 0; }
+td.m { font: 12.5px var(--mono); color: var(--accent); white-space: nowrap; }
+.timeline { list-style: none; margin: 8px 0 0; padding: 0; border-left: 2px solid var(--line); }
+.timeline li { position: relative; padding: 0 0 18px 20px; max-width: 74ch; }
+.timeline li::before { content: ""; position: absolute; left: -6px; top: 7px; width: 10px; height: 10px; border-radius: 50%; background: var(--panel); border: 2px solid var(--accent); }
+.timeline .d { font: 12px var(--mono); color: var(--faint); }
+.timeline b { font-family: var(--display); }
+.timeline p { margin: 2px 0 0; color: var(--muted); }
+.grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; margin: 6px 0 18px; }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; min-width: 0; }
+.card h4 { font: 600 15px var(--display); margin: 0 0 4px; }
+.card p { margin: 0; color: var(--muted); font-size: 14.5px; }
+dl { display: grid; grid-template-columns: 170px minmax(0, 1fr); gap: 8px 18px; margin: 6px 0 0; }
+dt { font-weight: 600; } dd { margin: 0; color: var(--muted); }
+footer { color: var(--faint); font-size: 13px; border-top: 1px solid var(--line); padding-top: 16px; }
+a { color: var(--accent); }
+@media (max-width: 880px) { .wrap { grid-template-columns: minmax(0, 1fr); } nav { display: none; } dl { grid-template-columns: minmax(0, 1fr); } dd { margin-bottom: 8px; } }
+</style>
+
+<div class="wrap">
+<nav aria-label="Chapters">
+  <p class="label">Chapters</p>
+  <a href="#minute">1. In one minute</a>
+  <a href="#pieces">2. The pieces</a>
+  <a href="#photo">3. A photo edit, step by step</a>
+  <a href="#video">4. A video edit, step by step</a>
+  <a href="#brain">5. How auto edit decides</a>
+  <a href="#reels">6. Reels and captions</a>
+  <a href="#built">7. How we built it</a>
+  <a href="#editlm">8. The custom model, next</a>
+  <a href="#glossary">9. Glossary</a>
+</nav>
+
+<main>
+<header>
+  <p class="label">Project handbook · state as of 17 Nov 2026</p>
+  <h1>How AIEditor works</h1>
+  <p class="lede">A plain-language guide to the whole project: what runs where, what happens when you ask for an edit, how the automatic editing makes its decisions, and how it was built. Each part says whether it exists today or is still planned.</p>
+</header>
+
+<section id="minute">
+  <p class="label">01</p>
+  <h2>In one minute</h2>
+  <p>AIEditor is a desktop photo and video editor for Windows. You describe the result you want ("cinematic travel video, 60 seconds, with music"), and it produces three finished versions you can preview, pick from and then change by hand. It can also turn one long video into several short, captioned vertical reels.</p>
+  <p>Everything runs on your own computer. There is no server of ours involved in editing: the speech recognition and the language model run locally, and your files are never uploaded.</p>
+  <div class="callout key"><b>The one idea to remember.</b> The model never touches pixels and never edits your project directly. It writes a short <em>edit program</em> (a few lines of text in our own Edit DSL). The engine checks that program, turns it into normal timeline changes, and renders it. That is why every automatic edit is previewable, editable, and one Undo away.</div>
+</section>
+
+<section id="pieces">
+  <p class="label">02</p>
+  <h2>The pieces</h2>
+  <p>There are two programs and a few local helpers. The <b>app</b> is the window you see (React interface inside a small Rust shell, built with Tauri). The <b>engine</b> is a Python program that does all the real work. The app starts the engine in the background and talks to it over a private connection on your own machine.</p>
+  <div class="diagram"><pre class="mermaid">
+flowchart LR
+  subgraph You
+    APP["Desktop app<br/>React UI + Tauri shell"]
+    CLI["aieditor command"]
+    N8N["n8n / scripts / agents"]
+  end
+  subgraph ENGINE["Engine (Python, runs locally)"]
+    API["API + command bus<br/>(undo history)"]
+    PLAN["Planner<br/>decides what to do"]
+    MEDIA["Analysis<br/>measures the media"]
+    RENDER["Renderer<br/>layers, colour, text, export"]
+  end
+  subgraph HELPERS["Local helpers"]
+    LLM["llama.cpp server<br/>Qwen3-1.7B model"]
+    WH["whisper.cpp<br/>speech to text"]
+  end
+  APP --> API
+  CLI --> API
+  N8N --> API
+  API --> PLAN --> LLM
+  API --> MEDIA --> WH
+  PLAN --> API
+  API --> RENDER
+  </pre></div>
+  <p>For the module-by-module view (data model, every route, rendering pipeline, security boundaries) see the companion page, the low-level design.</p>
+</section>
+
+<section id="photo">
+  <p class="label">03</p>
+  <h2>A photo edit, step by step</h2>
+  <ol class="steps">
+    <li><div><b>Measure the photo.</b> On import the engine computes exposure, highlight and shadow clipping, white balance and colour cast, contrast, saturation, noise and sharpness. These numbers are cached.</div></li>
+    <li><div><b>Write a brief.</b> The measurements become a few lines of plain text, for example "slightly underexposed, warm cast, low contrast". Text is cheaper and more precise for a small model than raw pixels.</div></li>
+    <li><div><b>Read the request.</b> Your words and the style/output options become <em>hints</em>: which looks fit "vintage", whether cropping was asked for, whether you only want fixes.</div></li>
+    <li><div><b>Ask the model, with a fence around it.</b> The model is given the brief, the hints, the list of tools and their ranges, and a grammar that only allows valid edit programs (at most one look, a few corrections, a few finishing touches).</div></li>
+    <li><div><b>Check the answer.</b> A sanitiser re-checks the program: only one look, and only an allowed one; adjustment sizes capped to safe limits; exposure may only move the way you asked or the measurements call for; a white product background is never darkened; colour temperature may not fight a "warm" or "cool" request.</div></li>
+    <li><div><b>Show three versions.</b> The program runs three times with different creativity, each rendered as a preview; the first is applied as one Undo step.</div></li>
+  </ol>
+  <pre class="code"><span class="c"># warm up the food and lift the shadows; keep it natural</span>
+<span class="k">white_balance</span> temp=+8
+<span class="k">adjust</span> exposure=+0.25 shadows=+20 contrast=+8
+<span class="k">look</span> film_portra s=0.6
+<span class="k">vignette</span> 0.15</pre>
+  <p>If the local model is not installed, a rule-based planner produces the same kind of program from keywords, so the feature still works, just less flexibly.</p>
+</section>
+
+<section id="video">
+  <p class="label">04</p>
+  <h2>A video edit, step by step</h2>
+  <p>Video is split into two jobs. The model chooses the <b>intent</b> (shape, pace, transitions, look, captions, music). Ordinary code, called the <b>director</b>, turns that intent into an exact cut list. A small model is good at the first job and bad at the second, so it only does the first.</p>
+  <div class="diagram"><pre class="mermaid">
+flowchart TD
+  A["Your clips + request + style/output options"] --> B["Analysis (cached)<br/>scene cuts, motion per second,<br/>loudness, music beats, transcript"]
+  B --> C["Media brief + hints"]
+  C --> D["Model writes an INTENT<br/>aspect, pace, transition, look,<br/>captions, title, music"]
+  D --> E["Guard rules<br/>things the model may not override"]
+  E --> F["Director (plain code)<br/>shot lengths from pace, cuts snapped<br/>to beats, best seconds of each clip,<br/>speech kept whole, variety limits"]
+  F --> G["Edit program (Video DSL)"]
+  G --> H["Timeline commands<br/>one Undo step"]
+  H --> I["Preview and export"]
+  </pre></div>
+  <p>An intent is tiny. This is all the model writes for one version:</p>
+  <pre class="code"><span class="c"># calm travel film: slow cuts, warm cinematic grade, music under</span>
+<span class="k">aspect</span> 16:9
+<span class="k">pace</span> slow
+<span class="k">transition</span> crossfade
+<span class="k">look</span> teal_orange_cinematic s=0.7
+<span class="k">grain</span> 0.12
+<span class="k">letterbox</span> 2.39
+<span class="k">music</span> 3</pre>
+  <p>The director then expands it into the full program: which clip, which seconds, in what order, with which transitions, aligned to the music. That expanded program is what you see in the timeline.</p>
+</section>
+
+<section id="brain">
+  <p class="label">05</p>
+  <h2>How auto edit decides</h2>
+  <div class="callout now"><span class="tag now">TODAY</span><b>No custom model has been trained yet.</b> The "brain" is <code>Qwen3-1.7B</code> (Apache 2.0 licence), an off-the-shelf small language model, quantised to 8-bit (about 1.8 GB) and run locally by <code>llama.cpp</code>. Everything that makes it behave like an editor comes from the system around it, described below. Where the code and prompts say "EditLM", that is the name reserved for the custom model in chapter 8.</div>
+
+  <h3>Five techniques that make a small general model edit well</h3>
+  <div class="grid2">
+    <div class="card"><h4>1. Measurements, not pixels</h4><p>The model reads a short text brief of numbers the engine measured (exposure, motion, speech, beats). It never has to "look" at an image.</p></div>
+    <div class="card"><h4>2. Grammar-constrained output</h4><p>Generation is limited by a GBNF grammar built from the tool schemas, so the output always parses. It can only name looks and values that exist.</p></div>
+    <div class="card"><h4>3. Hints as hard limits</h4><p>Your words and the style/output options narrow the grammar itself: a chosen style fixes the pace, "TikTok" fixes 9:16, a vague request only allows safe looks.</p></div>
+    <div class="card"><h4>4. Playbook and examples</h4><p>The prompt carries a short editing playbook (shot variety, pacing per genre, few transitions) and worked examples of request to plan.</p></div>
+    <div class="card"><h4>5. Guard rules after the model</h4><p>Code re-checks the answer: values are clamped to what the media can take, and some decisions (keep captions if asked, no crossfades in a fast edit) cannot be overridden.</p></div>
+    <div class="card"><h4>6. Code does the precise work</h4><p>Exact cut points, beat alignment, crop framing and colour maths are deterministic code, which is always correct and repeatable.</p></div>
+  </div>
+
+  <h3>What the grammar looks like</h3>
+  <p>A shortened version of the grammar the video planner sends with each request. The model physically cannot write a line outside it.</p>
+  <pre class="code">root      ::= rationale nl aspect nl pace nl trans (nl look)? (nl fin){0,2} (nl caps)? (nl music)?
+rationale ::= "# " [^\n]{3,120}
+aspect    ::= "aspect " ("16:9" | "9:16" | "1:1" | "4:5")
+pace      ::= "pace " ("fast" | "medium" | "slow")
+trans     ::= "transition " ("none" | "crossfade" | "fade_black" | ...)
+look      ::= "look " ("teal_orange_cinematic" | "golden_hour" | ...) " s=" ("0." [4-9] | "1" ("." [0-2])?)
+fin       ::= ("grain 0." [0-3] [0-9] | "vignette 0." [1-4] | "bloom 0." [1-3])</pre>
+
+  <h3>Three versions, not one</h3>
+  <p>The same request is sent three times with increasing "temperature" (0.2, 0.8, 1.1), from safe to adventurous, each with a fixed seed so results are repeatable. You see all three and pick.</p>
+
+  <h3>Fallbacks</h3>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Situation</th><th>What happens</th></tr></thead>
+    <tbody>
+      <tr><td>Model not installed</td><td>Rule-based planners for photo and video produce programs from keywords and measurements. The app labels this "Rules only".</td></tr>
+      <tr><td>Model output weak (e.g. copies an example)</td><td>The rationale is rewritten from the actual plan, and guard rules still apply.</td></tr>
+      <tr><td>Speech model missing</td><td>Captions and talk-based highlights are unavailable; visual and audio signals still drive edits.</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section id="reels">
+  <p class="label">06</p>
+  <h2>Reels and captions</h2>
+  <h3>Finding the best moments</h3>
+  <p>For a long talking video, the transcript is split into sentences and every possible window of the target length (for example 30 s) is scored. The score combines:</p>
+  <ol class="steps">
+    <li><div><b>Words.</b> Hooks, questions, numbers, strong statements, complete sentences (text rules), plus a 1 to 5 rating of each sentence by the local model ("would this make people stop scrolling?"), itself grammar-limited to one digit per line.</div></li>
+    <li><div><b>Sound.</b> Loudness and energy peaks such as laughter or emphasis.</div></li>
+    <li><div><b>Picture.</b> Motion and visual change per second.</div></li>
+  </ol>
+  <p>The best windows that do not overlap become the reels. Then pauses and filler words ("um", "you know") are cut using word timings, the speaker is tracked so a wide 16:9 shot becomes a well-framed 9:16 one, and captions, a progress bar and an optional end card are added.</p>
+  <h3>Captions that stay out of the way</h3>
+  <p>Captions are grouped from word timings (short chunks for bold reel captions), and the word being spoken is highlighted. Before export, the engine looks at a few frames under each caption, finds faces and any text already burned into the video (like a name title), and moves the caption to the spot that covers the least of them. Captions you placed by hand never move.</p>
+</section>
+
+<section id="built">
+  <p class="label">07</p>
+  <h2>How we built it</h2>
+  <p>Built in phases, each one tested on real footage before the next. Dates are from the project history.</p>
+  <ul class="timeline">
+    <li><span class="d">6 Nov</span><br><b>Engine core and photo editing.</b><p>Local API, media import, the command bus with undo, the photo engine with looks, the Edit DSL, and the first auto edit using the off-the-shelf Qwen3 model with grammar-constrained output.</p></li>
+    <li><span class="d">6 Nov</span><br><b>Video v1.</b><p>Timeline compositor, export, captions from speech, the video director and the video editor screen.</p></li>
+    <li><span class="d">11 Nov</span><br><b>Quality pass on real stock footage.</b><p>Edits were run on real clips and the failures fixed: exposure and colour-cast notes, white balance, planner mistakes.</p></li>
+    <li><span class="d">15 Nov</span><br><b>Layers (A1) and automatic editing (C).</b><p>Layered compositor with keyframes; then style and output options next to the prompt, highlight finding, auto-reframe, silence cutting and reels.</p></li>
+    <li><span class="d">16 Nov</span><br><b>Automation (D).</b><p>Headless API with keys and signed webhooks, seven recipes, the aieditor command, watch folders, MCP and the n8n node, tested inside real n8n.</p></li>
+    <li><span class="d">16 Nov</span><br><b>Release prep (R1).</b><p>Offline Pro licences, caption placement and word highlight, the Windows installer, the website, onboarding and the Pro screen.</p></li>
+    <li><span class="d">17 Nov</span><br><b>Brand and redesign.</b><p>New logo and a professional interface, plus a fix so the engine never outlives the app.</p></li>
+  </ul>
+  <div class="callout key"><b>How quality is checked.</b> 153 automated tests cover the engine (rendering maths, DSL round-trips, licensing, jobs, placement). Every larger feature was also run end to end on real footage, with frames inspected, before being called done.</div>
+</section>
+
+<section id="editlm">
+  <p class="label">08</p>
+  <h2>The custom model, next</h2>
+  <div class="callout plan"><span class="tag plan">PLANNED</span><b>EditLM</b> is the custom model that will replace the off-the-shelf one: a model of 2 billion parameters or fewer, trained only to drive this editor. Nothing in this chapter has been trained yet; it is the plan from the project roadmap.</div>
+  <h3>What it will learn from</h3>
+  <ol class="steps">
+    <li><div><b>An editing playbook</b> written by us (about 300 rules with good and bad examples), used for knowledge, for the rationale line, and as an automatic linter.</div></li>
+    <li><div><b>Expert recordings.</b> Professional editors edit freely licensed media inside AIEditor; the editor records their exact actions as edit programs. This is the most valuable data.</div></li>
+    <li><div><b>Synthetic data.</b> "Inverse edits": take a clean photo, apply a random look, have a teacher write the request that would produce it. For video, a large open teacher model plans edits that are executed in the engine; failures are dropped.</div></li>
+    <li><div><b>Opt-in feedback.</b> Which versions beta users keep or undo (only with consent).</div></li>
+  </ol>
+  <h3>How it will be trained</h3>
+  <div class="diagram"><pre class="mermaid">
+flowchart LR
+  D["Playbook + recordings<br/>+ synthetic data"] --> S["Supervised fine-tune<br/>rented GPU, 1-2 days"]
+  S --> R["Reinforcement learning<br/>reward = parses + looks better<br/>+ matches request - linter penalties"]
+  J["Large judge models<br/>(score renders)"] --> R
+  R --> M["Pick and merge<br/>best variants"]
+  M --> Q["Quantise to run<br/>on normal PCs"]
+  Q --> E["Eval: 300 fixed tasks<br/>must beat today's setup"]
+  </pre></div>
+  <p>It will also get a small vision adapter so it can "see" a compact summary of each shot, not just the numbers. The shipped app will still run fully offline; large models are only used during training, never on users' machines.</p>
+</section>
+
+<section id="glossary">
+  <p class="label">09</p>
+  <h2>Glossary</h2>
+  <dl>
+    <dt>Edit DSL</dt><dd>The small text language every edit is written in (photo and video). Humans, the model and automations all use it.</dd>
+    <dt>Command bus</dt><dd>The single path through which the project changes; it records undo history.</dd>
+    <dt>Intent</dt><dd>The model's short video plan: shape, pace, transitions, look, captions, music.</dd>
+    <dt>Director</dt><dd>Plain code that turns an intent into an exact cut list.</dd>
+    <dt>Grammar (GBNF)</dt><dd>A rule set that limits what the model may write, so output always parses.</dd>
+    <dt>Brief</dt><dd>A short text summary of measurements given to the model instead of pixels.</dd>
+    <dt>llama.cpp / whisper.cpp</dt><dd>Open-source local runtimes for the language model and speech recognition.</dd>
+    <dt>Recipe</dt><dd>An automation job type such as reel, captions, photo_edit or render_program.</dd>
+    <dt>EditLM</dt><dd>The planned custom-trained editing model (not trained yet).</dd>
+  </dl>
+</section>
+
+<footer>Written from the code and history at commit 7287595. Companion page: the low-level design diagrams (architecture).</footer>
+</main>
+</div>
