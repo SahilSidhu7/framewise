@@ -330,3 +330,5 @@ button.active { border-color: var(--accent); color: var(--accent); }
 .subject-outline polygon { fill: rgba(242, 163, 58, 0.14); stroke: var(--accent); stroke-width: 2px; stroke-linejoin: round; }
 .v-stage .pick-frame { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; z-index: 2; }
 .pick-hint { position: absolute; top: 12px; left: 50%; transform: translateX(-50%); z-index: 3; background: var(--accent); color: var(--accent-ink); font-weight: 600; font-size: 12px; padding: 4px 12px; border-radius: 999px; pointer-events: none; }
+.model-note { display: flex; flex-direction: column; gap: 6px; padding: 10px; border: 1px solid var(--line); border-radius: var(--r); background: var(--bg-2); }
+.model-note p { margin: 0; }

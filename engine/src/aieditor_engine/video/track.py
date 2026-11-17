@@ -107,6 +107,14 @@ def track_subject(path: Path, t: float, x: float, y: float) -> dict[str, Any]:
     mask = subject_mask(frames[k], (x, y), feather=0.2)
     b = mask_box(mask)
     box = np.array(b if b else (x - 0.1, y - 0.15, x + 0.1, y + 0.15), dtype=np.float64)
+    fh, fw = mask.shape[:2]
+    if b and (b[3] - b[1]) * fh > 0.9 * (b[2] - b[0]) * fw:
+        # a tall subject (a person): follow the head and shoulders, which is what framing should keep
+        # centred, rather than the whole body whose centre drifts with arms, chairs and leaning
+        y0, y1 = int(b[1] * fh), int((b[1] + (b[3] - b[1]) * 0.45) * fh)
+        xs = np.nonzero(mask[y0:max(y1, y0 + 1)] > 0.5)[1]
+        if xs.size > 20:
+            box = np.array([np.percentile(xs, 5) / fw, b[1], np.percentile(xs, 95) / fw, y1 / fh], dtype=np.float64)
     greys = [cv2.cvtColor(f, cv2.COLOR_RGB2GRAY) for f in frames]
     boxes: dict[int, tuple[np.ndarray, float]] = {k: (box, 1.0)}
     boxes.update(_run(greys, k, box, +1))

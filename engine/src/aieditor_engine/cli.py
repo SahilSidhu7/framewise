@@ -185,6 +185,32 @@ def _pro_or_explain(licence: Any, feature: str) -> bool:
     return True
 
 
+def cmd_models(args: argparse.Namespace) -> int:
+    from . import models
+
+    if args.action == "install":
+        if not args.name:
+            print("usage: framewise models install NAME", file=sys.stderr)
+            return 2
+        try:
+            path = models.install(args.name, None if args.quiet else lambda f: _bar(f))
+        except (KeyError, RuntimeError, OSError) as exc:
+            print(f"\n{exc}", file=sys.stderr)
+            return 1
+        print(f"\ninstalled {path}")
+        return 0
+    for m in models.status():
+        mark = "installed" if m["installed"] else f"{m['size_mb']} MB, not installed"
+        print(f"{m['name']:10s} {m['title']} ({mark}, {m['licence']})\n           {m['purpose']}")
+    return 0
+
+
+def _bar(f: float) -> None:
+    n = int(f * 30)
+    sys.stderr.write(f"\r[{'#' * n}{'.' * (30 - n)}] {f * 100:5.1f}%")
+    sys.stderr.flush()
+
+
 def cmd_licence(args: argparse.Namespace) -> int:
     from .licence import LicenceError, LicenceStore
 
@@ -273,6 +299,10 @@ def main(argv: list[str] | None = None) -> int:
     sub.add_parser("recipes", help="list recipes and their options")
     sub.add_parser("styles", help="list editing styles and outputs")
     sub.add_parser("mcp", help="MCP server on stdio (for AI agents)")
+    mo = sub.add_parser("models", help="optional models: list, install NAME")
+    mo.add_argument("action", nargs="?", default="list", choices=["list", "install"])
+    mo.add_argument("name", nargs="?")
+    mo.add_argument("--quiet", action="store_true")
     lc = sub.add_parser("licence", aliases=["license"], help="Pro licence: status, activate KEY, trial, deactivate")
     lc.add_argument("action", nargs="?", default="status", choices=["status", "activate", "trial", "deactivate"])
     lc.add_argument("key", nargs="?")
@@ -289,6 +319,8 @@ def main(argv: list[str] | None = None) -> int:
         return cmd_watch(args)
     if args.cmd == "keys":
         return cmd_keys(args)
+    if args.cmd == "models":
+        return cmd_models(args)
     if args.cmd in ("licence", "license"):
         return cmd_licence(args)
     if args.cmd == "recipes":

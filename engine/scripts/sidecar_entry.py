@@ -10,7 +10,7 @@ import sys
 from pathlib import Path
 
 CLI_COMMANDS = {"serve", "run", "reel", "highlights", "captions", "edit", "photo", "render", "transcribe", "watch",
-                "keys", "recipes", "styles", "mcp", "licence", "license", "--help", "-h", "--home", "--log-level"}
+                "keys", "recipes", "styles", "mcp", "licence", "license", "models", "--help", "-h", "--home", "--log-level"}
 
 
 def main() -> None:

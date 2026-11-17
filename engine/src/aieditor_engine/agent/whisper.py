@@ -95,10 +95,20 @@ def transcribe(media_path: Path, language: str = "auto", timeout: float = 900) -
             "-ml", "1", "-sow", "-oj", "-of", str(out_base), "-t", str(threads), "-np",
         ]
         flags = 0x08000000 if sys.platform == "win32" else 0  # CREATE_NO_WINDOW
-        proc = subprocess.run(args, capture_output=True, timeout=timeout, creationflags=flags, cwd=str(exe.parent))
+        from ..procs import bind_to_engine
+
+        proc = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.PIPE, stdin=subprocess.DEVNULL,
+                                creationflags=flags, cwd=str(exe.parent))
+        bind_to_engine(proc)  # a killed engine must not leave whisper running
+        try:
+            _, err = proc.communicate(timeout=timeout)
+        except subprocess.TimeoutExpired:
+            proc.kill()
+            proc.communicate()
+            raise WhisperUnavailable(f"whisper took longer than {timeout:.0f} s") from None
         result = out_base.with_suffix(".json")
         if proc.returncode != 0 or not result.is_file():
-            tail = proc.stderr.decode("utf-8", "replace")[-400:]
+            tail = err.decode("utf-8", "replace")[-400:]
             raise WhisperUnavailable(f"whisper failed: {tail}")
         data = json.loads(result.read_text(encoding="utf-8", errors="replace"))
     words = []

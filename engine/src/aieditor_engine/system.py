@@ -85,6 +85,7 @@ def ai_parts() -> dict[str, Any]:
         "editing_model": {"ready": llm["state"] != "not_installed", "name": llm.get("model")},
         "speech": {"ready": bool(speech["available"]), "name": speech.get("model")},
         "face_model": {"ready": _face_model() is not None},
+        "subject_model": {"ready": __import__("aieditor_engine.models", fromlist=["path_of"]).path_of("subject") is not None},
     }
 
 

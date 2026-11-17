@@ -10,7 +10,7 @@ import {
   type MediaItem,
   type Snapshot,
 } from "./engine";
-import { PhotoSubjectControls, SubjectOutline, pointOnImage, setPhotoSubject } from "./Subject";
+import { PhotoSubjectControls, SubjectModelNote, SubjectOutline, pointOnImage, setPhotoSubject } from "./Subject";
 
 type Tab = "ai" | "looks" | "adjust" | "crop" | "edits";
 
@@ -285,6 +285,7 @@ export function PhotoEditor({ client, snapshot, item, onNotice }: Props) {
               <section key={g.title} className="group">
                 <h4>{g.title}</h4>
                 {g.title === "Subject" && <PhotoSubjectControls item={item} stack={stack} picking={picking} setPicking={setPicking} run={run} />}
+                {g.title === "Subject" && <SubjectModelNote client={client} />}
                 {g.sliders.map((s) => (
                   <Slider key={s.op + s.key} spec={s} value={valueOf(s)} onSlide={onSlide} onCommit={onCommit} onReset={resetSlider} />
                 ))}

@@ -11,7 +11,7 @@ from aieditor_engine.system import AppSettings, benchmark, memory_gb, system_inf
 def test_system_info_and_benchmark() -> None:
     info = system_info()
     assert info["cores"] >= 1 and info["disk_free_gb"] > 0 and info["cpu"]
-    assert set(info["ai"]) == {"editing_model", "speech", "face_model"}
+    assert set(info["ai"]) == {"editing_model", "speech", "face_model", "subject_model"}
     assert info["hardware_encoder"] in (None, "nvenc")
     mem = memory_gb()
     assert mem is None or mem > 0.5

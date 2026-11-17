@@ -19,6 +19,18 @@ export interface MediaItem {
   subject?: { x: number; y: number; t: number } | null;
 }
 
+export interface ModelStatus {
+  name: string;
+  title: string;
+  purpose: string;
+  size_mb: number;
+  licence: string;
+  installed: boolean;
+  memory_gb: number | null;
+  fits: boolean;
+  download: { state: "running" | "done" | "failed"; progress: number; error: string | null } | null;
+}
+
 export interface SubjectInfo {
   kind: "photo" | "video";
   point?: string;
@@ -352,6 +364,8 @@ export class EngineClient {
   pickSubject = (mediaId: string, x: number, y: number, t = 0) => this.request<SubjectInfo>("POST", `/media/${mediaId}/subject`, { x, y, t });
   clearSubject = (mediaId: string) => this.request<{ pick: null }>("DELETE", `/media/${mediaId}/subject`);
   followSubject = (clipId: string) => this.request<{ keys: number; method: string }>("POST", `/clips/${clipId}/follow_subject`);
+  models = () => this.request<ModelStatus[]>("GET", "/models");
+  installModel = (name: string) => this.request<{ state: string; progress: number; error: string | null }>("POST", `/models/${name}/install`);
   mediaFrameUrl(mediaId: string, t: number, max = 960): string {
     return `${this.base}/media/${mediaId}/frame?token=${encodeURIComponent(this.token)}&t=${t.toFixed(3)}&max=${max}`;
   }

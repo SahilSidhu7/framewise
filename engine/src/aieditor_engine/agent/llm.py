@@ -119,6 +119,9 @@ class LlamaServer:
                 args, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, stdin=subprocess.DEVNULL,
                 creationflags=flags, cwd=str(server.parent),
             )
+            from ..procs import bind_to_engine
+
+            bind_to_engine(self._proc)  # never outlive the engine (it holds ~3 GB)
             stderr_tail: list[str] = []
             threading.Thread(target=self._drain, args=(self._proc, stderr_tail), daemon=True).start()
             deadline = time.time() + timeout

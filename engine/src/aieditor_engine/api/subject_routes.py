@@ -106,6 +106,23 @@ def register(app: FastAPI, require, secured: list) -> None:  # noqa: ANN001 - Fa
             raise HTTPException(422, str(exc)) from exc
         return {"pick": None}
 
+    @app.get("/models", dependencies=secured)
+    def list_models() -> list[dict[str, Any]]:
+        """Optional models: what each is for, size, licence, installed or downloading."""
+        from ..models import status
+
+        return status()
+
+    @app.post("/models/{name}/install", dependencies=secured)
+    def install_model(name: str) -> dict[str, Any]:
+        """Start downloading an optional model (only when the user asks for it)."""
+        from ..models import install_in_background
+
+        try:
+            return install_in_background(name)
+        except KeyError as exc:
+            raise HTTPException(404, f"unknown model `{name}`") from exc
+
     @app.get("/media/{media_id}/frame", dependencies=secured)
     def media_frame(media_id: str, t: float = Query(0.0, ge=0), size: int = Query(960, alias="max", ge=64, le=1920)) -> Response:
         """The original (unedited, uncropped) video frame at source time t, for picking a subject."""

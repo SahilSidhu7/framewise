@@ -126,3 +126,52 @@ def test_planner_words_and_video_guard() -> None:
 
     with pytest.raises(VideoDslError, match="for photos"):
         apply_video_program(Project(name="v", kind=ProjectKind.VIDEO), "subject bg_blur=10")
+
+
+@pytest.fixture(autouse=True)
+def _grabcut_only(request: pytest.FixtureRequest, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Keep these tests deterministic even when the optional model is installed on the machine."""
+    if "uses_model" not in request.keywords:
+        from aieditor_engine.imaging import segment
+
+        monkeypatch.setattr(segment, "available", lambda: False)
+
+
+def test_model_mask_selection(monkeypatch: pytest.MonkeyPatch) -> None:
+    """With a model: a click keeps the clicked object; auto keeps the main subject; a click elsewhere falls back."""
+    from aieditor_engine.imaging import segment, subject
+
+    h, w = 300, 400
+    prob = np.zeros((h, w), np.float32)
+    prob[60:240, 40:200] = 0.95   # big object (left)
+    prob[100:160, 280:340] = 0.9  # small object (right)
+    monkeypatch.setattr(segment, "subject_probability", lambda img: prob)
+    img = np.full((h, w, 3), 120, np.uint8)
+    auto = subject._model_mask(img, None)
+    assert auto[150, 100] > 0.9 and auto[130, 310] < 0.1  # small one dropped (< 35% of the main)
+    right = subject._model_mask(img, (310 / w, 130 / h))
+    assert right[130, 310] > 0.85 and right[150, 100] < 0.1
+    assert subject._model_mask(img, (0.95, 0.95)) is None  # nothing there: GrabCut takes over
+    monkeypatch.setattr(segment, "subject_probability", lambda img: np.zeros((h, w), np.float32))
+    assert subject._model_mask(img, None) is None
+
+
+@pytest.mark.uses_model
+@pytest.mark.skipif(__import__("aieditor_engine.models", fromlist=["path_of"]).path_of("subject") is None,
+                    reason="subject model not installed (framewise models install subject)")
+def test_real_model_finds_the_subject() -> None:
+    img = scene(640, 427)
+    m = subject_mask(img, None)
+    x0, y0, x1, y1 = mask_box(m)  # type: ignore[misc]
+    assert x0 < 0.62 < x1 and y0 < 0.55 < y1 and m[10, 10] < 0.2
+
+
+def test_model_routes() -> None:
+    c = TestClient(create_app(token="t"))
+    h = {"X-Engine-Token": "t"}
+    models = c.get("/models", headers=h).json()
+    sub = next(m for m in models if m["name"] == "subject")
+    assert sub["licence"] == "Apache-2.0" and sub["size_mb"] > 100 and sub["md5"] and "installed" in sub and "fits" in sub
+    hq = next(m for m in models if m["name"] == "subject-hq")
+    assert hq["licence"] == "MIT" and hq["min_memory_gb"] >= 12
+    assert c.post("/models/nope/install", headers=h).status_code == 404

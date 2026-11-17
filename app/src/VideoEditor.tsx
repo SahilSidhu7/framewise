@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { clipDuration, EngineClient, isTauri, projectDuration, type Caption, type Clip, type EngineEvent, type LookInfo, type Snapshot, type Track, type VideoVariation, type AiOptions, type OutputOptions } from "./engine";
 
-import { pointOnImage } from "./Subject";
+import { SubjectModelNote, pointOnImage } from "./Subject";
 
 type Tab = "ai" | "clip" | "look" | "text" | "export";
 type RunFn = (name: string, params: Record<string, unknown>) => Promise<Record<string, unknown> | undefined>;
@@ -895,6 +895,7 @@ function ClipPanel({ client, snapshot, entry, run, onSplit, onDelete, onPickSubj
                   Automatic
                 </button>
               </div>
+              <SubjectModelNote client={client} />
             </div>
           )}
           <div className="group">

@@ -12,6 +12,7 @@ dependencies = [
     "numpy>=2.0",
     "opencv-python-headless>=4.10",
     "pyyaml>=6.0",
+    "onnxruntime>=1.20",
 ]
 
 [project.scripts]
@@ -37,3 +38,4 @@ packages = ["src/aieditor_engine"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+markers = ["uses_model: runs the optional subject model when it is installed"]

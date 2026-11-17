@@ -133,8 +133,50 @@ def _fallback(h: int, w: int, point: tuple[float, float] | None) -> np.ndarray:
     return m.astype(np.float32)
 
 
+MODEL_WORK = 1024  # the segmentation model sees 1024 px, so keep that much detail for its mask
+
+
+def _model_mask(rgb_u8: np.ndarray, point: tuple[float, float] | None) -> np.ndarray | None:
+    """Soft mask from the optional BiRefNet model, limited to the clicked (or the main) subject.
+    None when the model isn't installed, sees no subject, or the click is on something it didn't pick."""
+    from .segment import subject_probability
+
+    h, w = rgb_u8.shape[:2]
+    s = min(1.0, MODEL_WORK / max(h, w))
+    img = rgb_u8 if s >= 1 else cv2.resize(rgb_u8, (round(w * s), round(h * s)), interpolation=cv2.INTER_AREA)
+    prob = subject_probability(img)
+    if prob is None:
+        return None
+    hard = (prob > 0.5).astype(np.uint8)
+    if hard.mean() < 0.004:
+        return None
+    n, labels, stats, _ = cv2.connectedComponentsWithStats(hard)
+    ih, iw = hard.shape
+    if point is not None:
+        px, py = int(point[0] * (iw - 1)), int(point[1] * (ih - 1))
+        r = max(2, int(min(ih, iw) * 0.015))
+        hits = labels[max(0, py - r):py + r + 1, max(0, px - r):px + r + 1]
+        hits = hits[hits > 0]
+        if hits.size == 0:
+            return None  # clicked something the model doesn't see as a subject: GrabCut takes over
+        keep = {int(np.bincount(hits).argmax())}
+    else:
+        areas = stats[1:, cv2.CC_STAT_AREA]
+        keep = {i + 1 for i, a in enumerate(areas) if a >= areas.max() * 0.35}
+    region = np.isin(labels, list(keep)).astype(np.uint8)
+    region = cv2.dilate(region, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (9, 9)))
+    return (prob * region).astype(np.float32)
+
+
 def subject_mask(rgb_u8: np.ndarray, point: tuple[float, float] | None = None, feather: float = 0.5) -> np.ndarray:
-    """Soft subject mask at the input's size (float32 0..1). rgb_u8: HxWx3 uint8 display-referred."""
+    """Soft subject mask at the input's size (float32 0..1). rgb_u8: HxWx3 uint8 display-referred.
+    Uses the BiRefNet model when installed (hair-accurate edges), otherwise GrabCut."""
+    model = _model_mask(rgb_u8, point)
+    if model is not None:
+        h, w = rgb_u8.shape[:2]
+        m = cv2.resize(model, (w, h), interpolation=cv2.INTER_LINEAR)
+        sigma = min(h, w) * 0.0015 * feather * 2  # the model's edge is already soft
+        return np.clip(cv2.GaussianBlur(m, (0, 0), sigma) if sigma >= 0.5 else m, 0, 1).astype(np.float32)
     small = _small(rgb_u8)
     key = hashlib.blake2b(small.tobytes(), digest_size=16).hexdigest() + f"|{point}"
     with _lock:

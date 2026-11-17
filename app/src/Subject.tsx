@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import type { EditOp, EngineClient, MediaItem } from "./engine";
+import type { EditOp, EngineClient, MediaItem, ModelStatus } from "./engine";
 
 /** Normalised (0..1) position of a click on an <img> drawn with object-fit: contain. */
 export function pointOnImage(img: HTMLImageElement, clientX: number, clientY: number): { x: number; y: number } | null {
@@ -18,13 +18,19 @@ export function pointOnImage(img: HTMLImageElement, clientX: number, clientY: nu
 /** Outline of the selected subject, drawn over the photo (same box and fit as the image). */
 export function SubjectOutline({ client, item, point, aspect }: { client: EngineClient; item: MediaItem; point: string; aspect: number }) {
   const [polys, setPolys] = useState<number[][][]>([]);
+  const [busy, setBusy] = useState(false);
   useEffect(() => {
     let live = true;
-    client.subject(item.id, point).then((r) => live && setPolys(r.outline ?? []), () => live && setPolys([]));
+    setBusy(true);
+    client.subject(item.id, point).then(
+      (r) => live && (setPolys(r.outline ?? []), setBusy(false)),
+      () => live && (setPolys([]), setBusy(false)),
+    );
     return () => {
       live = false;
     };
   }, [client, item.id, point]);
+  if (busy) return <div className="pick-hint">Finding the subject…</div>;
   if (!polys.length) return null;
   return (
     <svg className="subject-outline" viewBox={`0 0 ${aspect} 1`} preserveAspectRatio="xMidYMid meet" aria-hidden="true">
@@ -72,4 +78,49 @@ export async function setPhotoSubject(item: MediaItem, stack: EditOp[], run: Pro
   const point = `${x.toFixed(3)},${y.toFixed(3)}`;
   if (op) await run("photo.set_op", { media_id: item.id, op_id: op.id, params: { point } });
   else await run("photo.add_op", { media_id: item.id, op: "subject", params: { point } });
+}
+
+/** Offer the optional subject model (sharper edges) and show its download progress. */
+export function SubjectModelNote({ client }: { client: EngineClient }) {
+  const [m, setM] = useState<ModelStatus | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const refresh = () => client.models().then((list) => setM(list.find((x) => x.name === "subject") ?? null), () => undefined);
+  useEffect(() => {
+    void refresh();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [client]);
+  useEffect(() => {
+    if (m?.download?.state !== "running") return;
+    const id = window.setInterval(refresh, 1000);
+    return () => window.clearInterval(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [m?.download?.state]);
+  if (!m) return null;
+  if (m.installed)
+    return <p className="muted small">Using the subject model for sharp edges. The first outline of each photo takes about 10 seconds; after that it is instant.</p>;
+  const running = m.download?.state === "running";
+  return (
+    <div className="model-note">
+      <p className="small">
+        <strong>Sharper edges</strong> (hair, fine detail): download the subject model, {m.size_mb} MB, {m.licence} licence. It runs on this computer.
+      </p>
+      {!m.fits && (
+        <p className="muted small">It needs about 12 GB of memory while it works; this PC has {m.memory_gb} GB, so the built-in finder is used.</p>
+      )}
+      {!m.fits ? null : running ? (
+        <div className="progress" aria-label="Download progress">
+          <div style={{ width: `${Math.round((m.download?.progress ?? 0) * 100)}%` }} />
+        </div>
+      ) : (
+        <button
+          onClick={() =>
+            client.installModel("subject").then(() => refresh(), (e) => setError(e instanceof Error ? e.message : String(e)))
+          }
+        >
+          Download subject model
+        </button>
+      )}
+      {(error || m.download?.state === "failed") && <p className="error small">{error ?? m.download?.error}</p>}
+    </div>
+  );
 }

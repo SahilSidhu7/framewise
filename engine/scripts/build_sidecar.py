@@ -42,6 +42,7 @@ def main() -> None:
             "--collect-data", "aieditor_engine",  # looks (recipes/*.yaml)
             "--collect-all", "av",
             "--collect-submodules", "uvicorn",
+            "--collect-binaries", "onnxruntime",
             "--exclude-module", "tkinter", "--exclude-module", "matplotlib", "--exclude-module", "pytest",
             str(ENGINE / "scripts" / "sidecar_entry.py"),
         ],
