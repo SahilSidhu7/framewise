@@ -87,12 +87,39 @@ def run_case(name: str, files: list[Path], prompt: str) -> None:
     s.close()
 
 
+def travel_4k(files: list[Path], prompt: str) -> None:
+    """One AI edit, exported at 3840x2160, plus a small 1080p copy for the website."""
+    root = OUT / "work" / "travel"
+    shutil.rmtree(root, ignore_errors=True)
+    s = Session.create(root, "travel", ProjectKind.VIDEO)
+    s.import_media(files)
+    s.wait_for_jobs()
+    t = time.time()
+    res = plan_video(prompt, s.video_context(transcribe_speech=False), 3)
+    v = res["variations"][0]
+    s.bus.execute("timeline.apply_program", {"program": v["program"]}, source="ai")
+    proj = s.bus.project.model_copy(deep=True)
+    print(f"[travel] planned in {time.time() - t:.1f}s ({v['source']}): {v['rationale']}\n{v['program']}", flush=True)
+    dst = OUT / "travel_4k.mp4"
+    t = time.time()
+    r = export_video(proj, root, ExportSpec(dst, 3840, 2160, proj.settings.fps, "high"))
+    print(f"  4K: {r['width']}x{r['height']} {r['duration']}s via {r['encoder']}, rendered in {time.time() - t:.0f}s", flush=True)
+    times = [round(proj.duration * k / 6 + 0.5, 1) for k in range(6)]
+    strip(proj, root, times, f"AFTER  ·  {prompt}", OUT / "travel_frames.jpg")
+    (OUT / "travel_program.txt").write_text(f"Request: {prompt}\nWhy: {v['rationale']}\n\n{v['program']}\n", encoding="utf-8")
+    s.close()
+
+
 def main() -> None:
     media = Path(sys.argv[1])
     OUT.mkdir(parents=True, exist_ok=True)
     global ONLY
     ONLY = sys.argv[2] if len(sys.argv) > 2 else None
-    if (media / "CREDITS.txt").exists():  # real stock footage (demo/stock)
+    if (media / "credits.json").exists():  # 4K travel footage (demo/stock/travel)
+        clips = sorted(p for p in media.glob("*.webm"))
+        music = next(media.glob("music.*"))
+        travel_4k(clips + [music], 'cinematic travel film titled "Wide Open", slow and epic, with music')
+    elif (media / "CREDITS.txt").exists():  # real stock footage (demo/stock)
         clips = ["beach_drone.webm", "waves_vertical.webm", "city_timelapse.webm", "viaduct_timelapse.webm", "mountain_snow.webm"]
         run_case("real_reel", [media / c for c in clips] + [media / "music_upbeat.mp3"], "make an energetic travel reel with music")
         run_case("real_cinematic", [media / c for c in ("mountain_snow.webm", "beach_drone.webm", "interview.webm", "city_timelapse.webm")],

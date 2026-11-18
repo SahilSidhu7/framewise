@@ -115,6 +115,16 @@ def test_sanitize_follows_request_direction() -> None:
     assert _adjust("adjust exposure=0.6", [], "it's too dark")["exposure"] == 0.6
 
 
+def test_sanitize_drops_effect_already_in_look() -> None:
+    def ops(text: str) -> list[str]:
+        out, _ = sanitize(compile_program("look vintage_70s s=1\ngrain 0.3"), NEUTRAL,
+                          Hints(None, None, False, 1.0, (), f" {text} "))
+        return [o["op"] for o in out]
+
+    assert ops("vintage 70s film with grain") == ["look"]  # the look has grain: no second layer
+    assert ops("vintage with heavy grain") == ["look", "grain"]
+
+
 def test_sanitize_keeps_white_background() -> None:
     p = _adjust("adjust exposure=-1 highlights=-50 shadows=-30 vibrance=20", ["white background (keep whites bright, do not darken)"], "make the food look delicious")
     assert p == {"vibrance": 20}

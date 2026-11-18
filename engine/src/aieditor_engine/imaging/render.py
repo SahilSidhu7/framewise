@@ -255,7 +255,12 @@ def analyze(img_linear: np.ndarray) -> dict[str, Any]:
     white_bg = clipped > 0.02 and float((sat[hot] < 0.05).mean()) > 0.9 and float(((lum > 0.9) & (sat < 0.05)).mean()) > 0.15
     # suggested exposure: bring the brightest tones (p99) up to ~0.9 display, in linear stops
     ev_fix = float(np.log2(srgb_to_linear(np.float32(0.9)) / max(float(srgb_to_linear(np.float32(max(p99, 0.02)))), 1e-4)))
-    if p50 < 0.28 or p99 < 0.68:
+    # Night / blue-hour / low-key shots: dark overall, but real light sources (lamps, windows, a
+    # lit subject) reach near white. Lifting exposure there ruins the mood, so it is not a mistake.
+    p999 = float(np.percentile(lum, 99.9))
+    if 0.18 <= p50 < 0.35 and p99 >= 0.6 and p999 > 0.84 and p999 - p50 > 0.5:
+        notes.append("low-key / night scene with lights (keep it dark, do not lift exposure)")
+    elif p50 < 0.28 or p99 < 0.68:
         notes.append(f"underexposed (try exposure +{min(2.0, max(0.3, ev_fix)):.1f})")
     elif white_bg:
         notes.append("white background (keep whites bright, do not darken)")

@@ -233,3 +233,15 @@ def test_analyze_notes(scene: np.ndarray) -> None:
     assert a["orientation"] == "landscape"
     assert any("tilted" in n for n in a["notes"])
     assert len(a["palette"]) == 5
+
+
+def test_night_scene_with_lights_is_not_underexposed() -> None:
+    # dark blue-hour street (display ~0.3) with a few small lamps near white
+    rows = np.interp(np.linspace(0, 1, 400), [0, 0.5, 1], [0.08, 0.3, 0.7]).astype(np.float32)
+    disp = np.repeat(np.repeat(rows[:, None, None], 600, axis=1), 3, axis=2)
+    disp[..., 2] += 0.08  # bluish sky
+    for x in range(40, 600, 60):
+        disp[196:206, x:x + 10] = 0.98
+    notes = analyze(srgb_to_linear(disp))["notes"]
+    assert not any(n.startswith(("underexposed", "slightly dim")) for n in notes)
+    assert any(n.startswith("low-key") for n in notes)

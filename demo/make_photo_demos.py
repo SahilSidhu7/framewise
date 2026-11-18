@@ -44,6 +44,14 @@ STOCK_CASES = [
     ("portrait.jpg", "black and white, dramatic"),
     ("degraded", "fix it"),
 ]
+# Style set (demo/stock/photos, see photo_credits.json there): one photo per look.
+STYLE_CASES = [
+    ("lake_fog.jpg", "dreamy soft pastel morning"),
+    ("old_street.jpg", "vintage 70s film with grain"),
+    ("coffee.jpg", "moody dark aesthetic"),
+    ("lighthouse.jpg", "black and white, dramatic"),
+    ("dunes.jpg", "warm golden hour, make the colours pop"),
+]
 DEGRADE_FROM = WALL / "Wallpaper/ThemeC/img29.jpg"
 
 
@@ -92,8 +100,11 @@ def main() -> None:
     cases, prefix = CASES, "photo"
     if len(sys.argv) > 1:  # stock dir of real photos
         stock = Path(sys.argv[1])
-        cases = [(s if s == "degraded" else stock / s, p) for s, p in STOCK_CASES]
-        DEGRADE_FROM, prefix = stock / "food.jpg", "real"
+        if (stock / "lake_fog.jpg").exists():
+            cases, prefix = [(stock / s, p) for s, p in STYLE_CASES], "style"
+        else:
+            cases = [(s if s == "degraded" else stock / s, p) for s, p in STOCK_CASES]
+            DEGRADE_FROM, prefix = stock / "food.jpg", "real"
     OUT.mkdir(parents=True, exist_ok=True)
     work = OUT / "work"
     work.mkdir(exist_ok=True)
@@ -111,6 +122,11 @@ def main() -> None:
         after = to_display(apply_stack(img, ops))
         name = f"{prefix}_{i}_{prompt.split(',')[0].replace(' ', '_')[:28]}.jpg"
         sheet(before, after, prompt, v["program"], v["rationale"] or "-", OUT / name)
+        if prefix == "style":  # plain before/after pair for the website slider
+            for tag, arr in (("before", before), ("after", after)):
+                im = Image.fromarray(arr)
+                im.thumbnail((1600, 1600), Image.LANCZOS)
+                im.save(OUT / f"{name[:-4]}_{tag}.jpg", quality=86)
         dt = time.time() - t
         results.append((name, prompt, v["source"], v["program"].replace("\n", " | "), analysis["notes"], dt))
         print(f"{name}: [{v['source']}] {v['program'].replace(chr(10), ' | ')}  notes={analysis['notes']}  {dt:.1f}s")

@@ -239,6 +239,18 @@ SAFE_ADJUST = {"exposure": 2.0, "contrast": 40, "highlights": 60, "shadows": 60,
                "temperature": 35, "tint": 25, "vibrance": 40, "saturation": 40, "clarity": 40}
 
 
+FINISHING = {"grain", "vignette", "fade", "light_leak", "dust_scratches", "bloom", "chromatic_aberration", "texture"}
+
+
+def _look_steps(ops: list[dict[str, Any]]) -> set[str]:
+    """Finishing effects the program's look already applies."""
+    from ..imaging.recipes import load_recipes
+
+    look_op = next((o for o in ops if o["op"] == "look"), None)
+    recipe = load_recipes().get(look_op["params"].get("name", "")) if look_op else None
+    return {s[0] for s in recipe.steps} & FINISHING if recipe else set()
+
+
 def sanitize(ops: list[dict[str, Any]], analysis: dict[str, Any], hints: Hints) -> tuple[list[dict[str, Any]], list[str]]:
     notes = " ".join(analysis.get("notes", []))
     text = hints.text
@@ -306,6 +318,14 @@ def sanitize(ops: list[dict[str, Any]], analysis: dict[str, Any], hints: Hints) 
             continue
         seen_ops.add(name)
         out.append({"op": name, "params": params})
+    # A finishing effect the chosen look already contains (grain, vignette, fade...) would be applied
+    # twice. Keep the look's own, unless the user asked for more of it.
+    inside = _look_steps(out)
+    if inside and not re.search(r"\b(more|extra|heavy|heavier|strong|stronger|lots of)\b", text):
+        for o in list(out):
+            if o["op"] in inside and o["op"] in FINISHING:
+                out.remove(o)
+                fixed.append(f"dropped {o['op']} (already in the look)")
     # corrections first, look next, finishing effects last
     order = {"straighten": 0, "rotate": 0, "flip": 0, "white_balance": 1, "denoise": 1, "dehaze": 1, "adjust": 2, "look": 3, "crop": 9}
     out.sort(key=lambda o: order.get(o["op"], 5))
@@ -377,9 +397,10 @@ def _plan_llm(prompt: str, brief: str, hints: Hints, analysis: dict[str, Any], n
             if adj["params"].get("exposure", 0) > -0.5:
                 adj["params"]["exposure"] = -0.7
                 warnings.append("darkened for a dark/moody request")
+        in_look = _look_steps(ops)
         for pattern, stmt in EXTRA_OPS:
             op_name = stmt.split()[0]
-            if op_name not in present and wants(pattern, hints.text):
+            if op_name not in present and op_name not in in_look and wants(pattern, hints.text):
                 ops.extend(compile_lenient(stmt)[0])
                 warnings.append(f"added requested {op_name}")
         if hints.aspect and "crop" not in present:  # the user asked for this shape; the model forgot it
