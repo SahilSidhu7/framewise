@@ -92,8 +92,15 @@ def travel_4k(files: list[Path], prompt: str) -> None:
     root = OUT / "work" / "travel"
     shutil.rmtree(root, ignore_errors=True)
     s = Session.create(root, "travel", ProjectKind.VIDEO)
-    s.import_media(files)
-    s.wait_for_jobs()
+    try:
+        s.import_media(files)
+        s.wait_for_jobs()
+        _travel(s, root, prompt)
+    finally:
+        s.close()  # an error must not leave the session's threads keeping the process alive
+
+
+def _travel(s: Session, root: Path, prompt: str) -> None:
     t = time.time()
     res = plan_video(prompt, s.video_context(transcribe_speech=False), 3)
     v = res["variations"][0]
@@ -107,7 +114,6 @@ def travel_4k(files: list[Path], prompt: str) -> None:
     times = [round(proj.duration * k / 6 + 0.5, 1) for k in range(6)]
     strip(proj, root, times, f"AFTER  ·  {prompt}", OUT / "travel_frames.jpg")
     (OUT / "travel_program.txt").write_text(f"Request: {prompt}\nWhy: {v['rationale']}\n\n{v['program']}\n", encoding="utf-8")
-    s.close()
 
 
 def main() -> None:

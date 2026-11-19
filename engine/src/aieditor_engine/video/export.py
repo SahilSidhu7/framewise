@@ -117,6 +117,25 @@ def _rate(fps: float) -> Fraction:
     return Fraction(fps).limit_denominator(1001)
 
 
+def _parallelism(w: int, h: int, seg_len: int, requested: int | None) -> tuple[int, int]:
+    """Render threads and how many finished segments may wait for the encoder, sized to memory.
+
+    Each worker needs ~12 float32 frame buffers while compositing (decode, layers, grade), and every
+    queued segment holds seg_len rgb24 frames. At 4K that is ~1.1 GB per worker and ~0.75 GB per
+    queued second, so the 1080p defaults (8 workers, 16 queued) would need ~20 GB.
+    """
+    from ..imaging.segment import _free_gb
+
+    cpu = requested or max(1, min(8, (os.cpu_count() or 4) - 2))
+    worker_gb = 12 * w * h * 3 * 4 / 2**30
+    segment_gb = seg_len * w * h * 3 / 2**30
+    free = _free_gb()
+    budget = 6.0 if free is None else max(1.0, min(free * 0.5, 12.0))  # leave half for everything else
+    workers = max(1, min(cpu, int(budget * 0.6 / worker_gb)))
+    ahead = max(workers, min(workers * 2, int(budget * 0.4 / segment_gb)))
+    return workers, ahead
+
+
 def export_video(
     project: Project,
     root: Path,
@@ -143,8 +162,9 @@ def export_video(
     total = max(1, int(math.floor(duration * fps + 1e-6)))
     encoder = pick_encoder(w, h, spec.encoder)
     bitrate = _bitrate(w, h, fps, spec.quality)
-    workers = spec.workers or max(1, min(8, (os.cpu_count() or 4) - 2))
     seg_len = max(1, int(round(SEGMENT_SECONDS * fps)))
+    workers, ahead = _parallelism(w, h, seg_len, spec.workers)
+    log.info("export %dx%d: %d workers, %d segments queued", w, h, workers, ahead)
     segments = [(s, min(total, s + seg_len)) for s in range(0, total, seg_len)]
     job = f"export-{id(spec)}"
     channels: set[str] = set()
@@ -198,7 +218,7 @@ def export_video(
             with ThreadPoolExecutor(max_workers=workers, thread_name_prefix="render") as pool:
                 pending: list[Future] = []
                 it = iter(segments)
-                for _ in range(workers * 2):
+                for _ in range(ahead):
                     seg = next(it, None)
                     if seg:
                         pending.append(pool.submit(render_segment, *seg))

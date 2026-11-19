@@ -571,3 +571,18 @@ def test_v1_project_migrates_to_layers():
     p = Project.model_validate(migrate(raw))
     c = p.tracks[0].clips[0]
     assert p.schema_version == SCHEMA_VERSION == 2 and not c.is_layered and c.blend == "normal" and c.opacity == 1 and p.markers == []
+
+
+def test_export_parallelism_fits_memory(monkeypatch):
+    from aieditor_engine.imaging import segment
+    from aieditor_engine.video.export import _parallelism
+
+    monkeypatch.setattr(segment, "_free_gb", lambda: 16.0)
+    w1080, a1080 = _parallelism(1920, 1080, 30, 8)
+    w4k, a4k = _parallelism(3840, 2160, 30, 8)
+    assert w1080 >= 4 and w4k < w1080  # 4K gets fewer threads
+    frame = 3840 * 2160 * 3
+    peak_gb = (w4k * 12 * frame * 4 + a4k * 30 * frame) / 2**30
+    assert peak_gb <= 8.0  # half of what is free
+    monkeypatch.setattr(segment, "_free_gb", lambda: 1.0)
+    assert _parallelism(3840, 2160, 30, 8) == (1, 1)  # low memory: still renders, one at a time
