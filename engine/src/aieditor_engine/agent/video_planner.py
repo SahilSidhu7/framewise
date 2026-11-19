@@ -17,6 +17,8 @@ from collections.abc import Callable
 from dataclasses import dataclass, field, replace
 from typing import Any
 
+import numpy as np
+
 from ..imaging.recipes import load_recipes
 from ..video.analysis import best_window
 from ..video.reframe import reframe_keys, x_param
@@ -252,6 +254,8 @@ class Shot:
     speed: float = 1.0
     motion: str = "none"
     speech: bool = False
+    cut: str = ""  # incoming transition chosen by the director ("none" = hard cut); "" = the intent's default
+    volume: float | None = None
 
     @property
     def duration(self) -> float:
@@ -298,6 +302,129 @@ def _beats(ctx: VideoContext, number: int | None) -> list[float]:
     return []
 
 
+def _song(ctx: VideoContext, number: int | None) -> MediaInfo | None:
+    return next((s for s in ctx.songs if s.number == number), None)
+
+
+def _norm(values: list[float]) -> list[float]:
+    if not values:
+        return []
+    lo, hi = float(np.percentile(values, 10)), float(np.percentile(values, 90))
+    return [float(np.clip((v - lo) / (hi - lo), 0, 1)) if hi - lo > 1e-6 else 0.5 for v in values]
+
+
+def _energy_curve(energy: list[float], end: float) -> list[float]:
+    """Per-second loudness smoothed over a bar or two (beat-level pulsing is not the song's shape), 0..1."""
+    raw = np.asarray(energy[: int(np.ceil(end)) + 4], dtype=np.float32)
+    if raw.size == 0:
+        return [0.5]
+    k = min(5, raw.size)
+    smooth = np.convolve(np.pad(raw, (k // 2, k - 1 - k // 2), mode="edge"), np.ones(k) / k, mode="valid")
+    return _norm([float(v) for v in smooth])
+
+
+# shot-length rhythm on top of the music's energy: steady lengths read as a slideshow
+RHYTHM = (1.0, 0.75, 1.25, 0.85, 1.1, 0.7, 1.2, 0.9)
+
+
+def _mean(values: list[float], a: float, b: float, default: float) -> float:
+    i, j = int(a), max(int(a) + 1, int(np.ceil(b)))
+    part = values[i:j]
+    return float(np.mean(part)) if part else default
+
+
+def _cut_times(beats: list[float], energy: list[float], target: float, base: float, song_len: float) -> tuple[list[float], set[float]]:
+    """Cut points that follow the music: on beats (downbeats preferred), long shots where the song is
+    quiet and shorter ones where it builds, ending on a phrase boundary. Returns (cuts incl. 0 and the
+    end, phrase starts) - phrase starts are where a dissolve reads as a new chapter."""
+    beat = float(np.median(np.diff(beats)))
+    downbeats = beats[::4]
+    phrases = beats[::16] if len(beats) > 16 else downbeats[::2]
+    usable = [p for p in phrases if p >= 2 * base and p <= song_len - 0.5]
+    end = min(usable, key=lambda p: abs(p - target)) if usable else min(target, song_len)
+    e = _energy_curve(energy, end)
+    cuts, t = [0.0], 0.0
+    while True:
+        level = _mean(e, t, t + base, 0.5)
+        want = base * (1.4 - 0.75 * level)  # calm: ~1.4x the pace's shot, peak: ~0.65x
+        want *= 1.35 if len(cuts) == 1 else RHYTHM[len(cuts) % len(RHYTHM)]  # the opening shot carries the title
+        lo, hi = t + max(1.2, 2 * beat, want * 0.7), t + want * 1.3
+        if end <= hi or end - (t + want) < base * 0.6:
+            cuts.append(end)
+            break
+        near = [p for p in phrases if lo <= p <= hi] or [d for d in downbeats if lo <= d <= hi] or [b for b in beats if lo <= b <= hi]
+        nxt = min(near, key=lambda x: abs(x - (t + want))) if near else t + want
+        cuts.append(nxt)
+        t = nxt
+    return cuts, {round(p, 3) for p in phrases}
+
+
+def _music_cut(intent: Intent, broll: list[MediaInfo], song: MediaInfo, target: float, base: float) -> list[Shot]:
+    """Music-led montage (no speech): rhythm from the song, shots matched to its energy.
+
+    - cut lengths vary with the music (_cut_times), hard cuts on the beat, a dissolve only where a phrase starts
+    - calm, well-exposed shots open and close the film; the moving shots go where the music peaks
+    - two shots of the same clip are never back to back, and every clip gets used before any repeats
+    """
+    music = song.music or {}
+    beats = list(music.get("beats", []))
+    beat = float(np.median(np.diff(beats)))
+    cuts, phrase_starts = _cut_times(beats, list(music.get("energy", [])), target, base, song.duration)
+    energy = _energy_curve(list(music.get("energy", [])), cuts[-1])
+    all_motion = [v for m in broll for v in m.analysis.get("motion_s", [])]
+    lo, hi = (float(np.percentile(all_motion, 10)), float(np.percentile(all_motion, 90))) if all_motion else (0.0, 1.0)
+    used: dict[str, list[tuple[float, float]]] = {m.media_id: [] for m in broll}
+    uses = dict.fromkeys(used, 0)
+    seq: list[Shot] = []
+    n = len(cuts) - 1
+    for i in range(n):
+        t0, t1 = cuts[i], cuts[i + 1]
+        dur = t1 - t0
+        calm = i == 0 or i == n - 1
+        want_motion = 0.15 if calm else 0.15 + 0.75 * _mean(energy, t0, t1, 0.5)
+        best: tuple[float, Shot] | None = None
+        for m in broll:
+            if seq and seq[-1].media is m and len(broll) > 1:
+                continue
+            speed = 0.5 if intent.slowmo else 1.0
+            if m.kind == "image":
+                shot, q, mot = Shot(m, 0.0, dur, motion=("zoom_in", "pan_right", "zoom_out", "pan_left")[uses[m.media_id] % 4]), 0.55, 0.3
+            else:
+                src = dur * speed
+                if src > m.duration:
+                    continue
+                gap = max(1.5, src * 0.5)
+                blocked = [(a - gap, b + gap) for a, b in used[m.media_id]]
+                a, b = best_window(m.analysis.get("seconds", []), src, blocked, m.duration)
+                if b - a < src - 0.05 or any(a < ub and b > ua for ua, ub in blocked):
+                    continue
+                q = _mean(m.analysis.get("seconds", []), a, b, 0.5)
+                ms = m.analysis.get("motion_s")
+                raw = _mean(ms, a, b, 0.5) if ms else min(1.0, m.analysis.get("motion", 0.04) / 0.08)
+                mot = float(np.clip((raw - lo) / (hi - lo), 0, 1)) if hi - lo > 1e-6 else 0.5
+                shot = Shot(m, a, b, speed=speed, motion="zoom_in" if raw < 0.08 else "none")
+            score = q - 0.35 * abs(mot - want_motion) - 0.2 * uses[m.media_id]
+            if len(seq) > 1 and seq[-2].media is m:
+                score -= 0.15
+            if best is None or score > best[0]:
+                best = (score, shot)
+        if best is None:
+            break
+        shot = best[1]
+        if i > 0:
+            at_phrase = any(abs(t0 - p) < 0.05 for p in phrase_starts)
+            if at_phrase and intent.transition != "none":
+                kind = intent.transition if intent.transition != "crossfade" else "crossfade"
+                shot.cut = f"{kind}:{min(1.0, beat if intent.pace == 'slow' else beat / 2):.2f}"
+            else:
+                shot.cut = "none"
+        shot.volume = 0.0  # drone wind and handling noise fight the score
+        used[shot.media.media_id].append((shot.a, shot.b))
+        uses[shot.media.media_id] += 1
+        seq.append(shot)
+    return seq
+
+
 def direct(intent: Intent, ctx: VideoContext) -> str:
     """Expand an intent into a concrete Video Edit DSL program."""
     vis = ctx.visual
@@ -325,6 +452,12 @@ def direct(intent: Intent, ctx: VideoContext) -> str:
     talk_len = sum(b - a for a, b in talk_cuts.values())
     target = intent.length or (talk_len + min(material * 0.7, max(default_len - talk_len, shot_len * 4)))
     broll_budget = max(0.0, target - talk_len) if talk else target
+
+    song = _song(ctx, intent.music)
+    if song and len(beats) > 16 and not talk and intent.pace != "fast" and len(broll) > 1:
+        seq = _music_cut(intent, broll, song, target, PACE_SHOT.get(intent.pace, 2.4))
+        if seq:
+            return _emit(intent, ctx, seq, talk, music_led=True)
 
     # allocate b-roll shots: more shots for longer / better clips
     shots_by_media: dict[str, list[Shot]] = {}
@@ -407,7 +540,11 @@ def direct(intent: Intent, ctx: VideoContext) -> str:
     # trim to target (drop trailing b-roll first)
     while len(seq) > 1 and sum(s.duration for s in seq) > target * 1.15 and not seq[-1].speech:
         seq.pop()
+    return _emit(intent, ctx, seq, talk)
 
+
+def _emit(intent: Intent, ctx: VideoContext, seq: list[Shot], talk: list[MediaInfo], music_led: bool = False) -> str:
+    """Write the shot list (plus music, grade, titles) as a Video Edit DSL program."""
     lines = [f"# {intent.rationale}" if intent.rationale else "# edit", f"aspect {intent.aspect}"]
     aw, ah = ASPECTS[intent.aspect]
     tracks: dict[str, dict[str, Any] | None] = {}
@@ -435,16 +572,24 @@ def direct(intent: Intent, ctx: VideoContext) -> str:
             parts.append(f"speed={s.speed:g}")
         if s.motion != "none":
             parts.append(f"motion={s.motion}")
-        if i > 0 and trans != "none" and not (s.speech and seq[i - 1].speech):
+        if s.cut:
+            if s.cut != "none":
+                kind, _, d = s.cut.partition(":")
+                parts.append(f"transition={kind}:{min(float(d), s.duration / 2):.2f}")
+        elif i > 0 and trans != "none" and not (s.speech and seq[i - 1].speech):
             parts.append(f"transition={trans}:{min(tdur, s.duration / 2):.2f}")
-        if intent.music and not s.speech and s.media.kind == "video":
+        if s.volume is not None and s.media.kind == "video":
+            parts.append(f"volume={s.volume:g}")
+        elif intent.music and not s.speech and s.media.kind == "video":
             parts.append("volume=0.25")
         framing = follow(s)
         if framing:
             parts.append(framing)
         lines.append(" ".join(parts))
     if intent.music:
-        lines.append(f"music {intent.music} volume=0.8 fade={1.5 if intent.pace != 'fast' else 0.8}")
+        # music-led: the film ends on a phrase, so let the song breathe out over the last shot
+        fade = min(4.0, seq[-1].duration * 0.8) if music_led else 1.5 if intent.pace != "fast" else 0.8
+        lines.append(f"music {intent.music} volume=0.85 fade={fade:.1f}" if music_led else f"music {intent.music} volume=0.8 fade={fade}")
     if intent.look:
         lines.append(f"look {intent.look} s={intent.strength:g}")
     lines.extend(intent.finishing)
@@ -452,11 +597,16 @@ def direct(intent: Intent, ctx: VideoContext) -> str:
         lines.append(f"letterbox {intent.letterbox:g}")
     if intent.pace != "fast":
         lines.append(f"fade_in {0.6 if intent.pace == 'medium' else 1.0}")
-    lines.append(f"fade_out {0.6 if intent.pace == 'fast' else 1.2}")
+    lines.append(f"fade_out {min(2.5, seq[-1].duration * 0.5):.1f}" if music_led else f"fade_out {0.6 if intent.pace == 'fast' else 1.2}")
     if intent.title:
         title = intent.title.replace('"', "'")
         style = intent.title_style
-        lines.append(f'title "{title}" at=0.3 dur={2.2 if intent.pace == "fast" else 3.2} style={style}' + (" pos=center" if style == "bold_pop" else ""))
+        if music_led:  # the title rides the opening shot, in after the fade-in, out before the first cut
+            at = 1.0
+            dur = max(2.0, min(4.5, seq[0].duration - at - 0.4))
+            lines.append(f'title "{title}" at={at:.1f} dur={dur:.1f} style={style}')
+        else:
+            lines.append(f'title "{title}" at=0.3 dur={2.2 if intent.pace == "fast" else 3.2} style={style}' + (" pos=center" if style == "bold_pop" else ""))
     if intent.captions and talk:
         lines.append(f"captions {intent.captions}")
     return "\n".join(lines)

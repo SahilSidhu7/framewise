@@ -67,15 +67,18 @@ def analyze_video(path: Path) -> dict[str, Any]:
     for ct in cuts:
         score[np.abs(np.asarray(times) - ct) < 0.3] *= 0.6
 
-    seconds = []
+    seconds: list[float] = []
+    motion_s: list[float] = []  # per-second motion 0..1, so the director can match shots to the music's energy
     n_sec = int(np.ceil(duration))
     tarr = np.asarray(times)
     for sec in range(n_sec):
         mask = (tarr >= sec) & (tarr < sec + 1)
         if mask.any():
             seconds.append(round(float(score[mask].mean()), 3))
+            motion_s.append(round(float(np.clip(m[mask].mean() / 0.08, 0, 1)), 3))
         else:
             seconds.append(seconds[-1] if seconds else 0.0)
+            motion_s.append(motion_s[-1] if motion_s else 0.0)
 
     notes = []
     if b.mean() < 0.28:
@@ -103,6 +106,7 @@ def analyze_video(path: Path) -> dict[str, Any]:
         "colorfulness": round(float(col.mean()), 3),
         "cuts": [round(c, 2) for c in cuts],
         "seconds": seconds,
+        "motion_s": motion_s,
         "notes": notes,
     }
 

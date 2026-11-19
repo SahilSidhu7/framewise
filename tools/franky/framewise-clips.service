@@ -1,0 +1,13 @@
+[Unit]
+Description=Framewise clip engine (API on 127.0.0.1:8765 + inbox watch folder)
+After=network-online.target
+
+[Service]
+Environment=AIEDITOR_HOME=@CLIPS@/home
+ExecStart=@CLIPS@/.venv/bin/framewise --home @CLIPS@/home --log-level info serve --watch @CLIPS@/inbox
+Restart=on-failure
+RestartSec=10
+Nice=10
+
+[Install]
+WantedBy=default.target

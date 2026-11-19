@@ -1,0 +1,7 @@
+# What the inbox makes from every video dropped into it.
+# Recipes: reel | highlights | captions | video_edit | transcribe   (framewise recipes)
+# Styles:  gaming | energetic_reel | cinematic | sports_highlights | funny | ...  (framewise styles)
+recipe: reel
+style: gaming
+output: {platform: tiktok, length: 30, quality: high}
+options: {count: 3}
