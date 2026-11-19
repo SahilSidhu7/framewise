@@ -67,7 +67,7 @@ def film() -> tuple[str, list[str]]:
     with av.open(str(src)) as c:
         dur = float(c.duration) / 1e6
         for frame in c.decode(video=0):  # poster: the title card
-            if frame.time >= 1.6:
+            if frame.time >= 3.0:
                 im = frame.to_image()
                 break
     im.thumbnail((1920, 1080), Image.LANCZOS)

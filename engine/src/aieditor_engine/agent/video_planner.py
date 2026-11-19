@@ -403,7 +403,10 @@ def _music_cut(intent: Intent, broll: list[MediaInfo], song: MediaInfo, target: 
                 raw = _mean(ms, a, b, 0.5) if ms else min(1.0, m.analysis.get("motion", 0.04) / 0.08)
                 mot = float(np.clip((raw - lo) / (hi - lo), 0, 1)) if hi - lo > 1e-6 else 0.5
                 shot = Shot(m, a, b, speed=speed, motion="zoom_in" if raw < 0.08 else "none")
-            score = q - 0.35 * abs(mot - want_motion) - 0.2 * uses[m.media_id]
+            # a second moment of one drone flight often looks like the first: use every clip before repeating
+            # (long clips travel further, so their second moment is likelier to look new)
+            repeat = 0.45 * min(1.5, (150 / max(m.duration, 30)) ** 0.6)
+            score = q - 0.35 * abs(mot - want_motion) - repeat * uses[m.media_id]
             if len(seq) > 1 and seq[-2].media is m:
                 score -= 0.15
             if best is None or score > best[0]:
