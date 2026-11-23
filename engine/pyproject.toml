@@ -13,6 +13,7 @@ dependencies = [
     "opencv-python-headless>=4.10",
     "pyyaml>=6.0",
     "onnxruntime>=1.20",
+    "moderngl>=5.12",
 ]
 
 [project.scripts]

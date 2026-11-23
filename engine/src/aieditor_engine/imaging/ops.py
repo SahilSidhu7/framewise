@@ -474,14 +474,18 @@ class GrainParams(BaseModel):
 def grain(img: np.ndarray, p: GrainParams, ctx: RenderContext) -> np.ndarray:
     if p.amount <= 0:
         return img
-    h, w = img.shape[:2]
-    cell = max(1.0, ctx.px(img, p.size))
-    gh, gw = max(2, int(h / cell)), max(2, int(w / cell))
-    noise = _rng(ctx, p.seed).standard_normal((gh, gw)).astype(np.float32)
-    noise = cv2.resize(noise, (w, h), interpolation=cv2.INTER_CUBIC)
+    noise = grain_noise(img.shape[0], img.shape[1], p, ctx)
     lum = np.clip(luminance(img), 0, 1)
     strength = p.amount * 0.12 * (0.35 + 2.6 * lum * (1 - lum))
     return img + (noise * strength)[..., None]
+
+
+def grain_noise(h: int, w: int, p: GrainParams, ctx: RenderContext) -> np.ndarray:
+    """The grain field for one frame (also uploaded by the GPU finishing pass)."""
+    cell = max(1.0, p.size * min(h, w) / 1000.0)
+    gh, gw = max(2, int(h / cell)), max(2, int(w / cell))
+    noise = _rng(ctx, p.seed).standard_normal((gh, gw)).astype(np.float32)
+    return cv2.resize(noise, (w, h), interpolation=cv2.INTER_CUBIC)
 
 
 class VignetteParams(BaseModel):

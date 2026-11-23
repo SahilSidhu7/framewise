@@ -39,7 +39,8 @@ def main() -> None:
             "--noconfirm", "--clean", "--onefile",
             "--name", "framewise-engine",
             "--collect-submodules", "aieditor_engine",
-            "--collect-data", "aieditor_engine",  # looks (recipes/*.yaml)
+            "--collect-data", "aieditor_engine",  # looks (recipes/*.yaml), GPU shaders (gpu/shaders)
+            "--collect-submodules", "glcontext",  # OpenGL context backends are imported by name
             "--collect-all", "av",
             "--collect-submodules", "uvicorn",
             "--collect-binaries", "onnxruntime",

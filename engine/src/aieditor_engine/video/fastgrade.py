@@ -61,6 +61,12 @@ class _Noise:
         oy, ox = (seed * 7) % 32, (seed * 13) % 32
         return tex[oy : oy + h, ox : ox + w]
 
+    def full(self, h: int, w: int) -> np.ndarray:
+        """The whole (h + 32, w + 32, 3) texture the per-frame windows come from."""
+        self.get(h, w, 0)
+        with self._lock:
+            return self._cache[(h, w)]
+
 
 NOISE = _Noise()
 

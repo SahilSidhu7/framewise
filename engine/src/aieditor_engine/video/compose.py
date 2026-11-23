@@ -352,8 +352,17 @@ def composite_tracks(project: Project, t: float, w: int, h: int, src: RenderSour
     return canvas if canvas is not None else np.zeros((h, w, 3), dtype=np.float32)
 
 
+def _gpu_frame(project: Project, t: float, w: int, h: int, src: RenderSource, seed: int, grade: list[dict[str, Any]]) -> np.ndarray | None:
+    from ..gpu.compositor import get
+
+    gpu = get()
+    if gpu is None:
+        return None
+    return gpu.render(project, t, w, h, src, seed, grade)
+
+
 def render_frame(
-    project: Project, t: float, w: int, h: int, src: RenderSource, *, captions: bool = True
+    project: Project, t: float, w: int, h: int, src: RenderSource, *, captions: bool = True, use_gpu: bool = True
 ) -> np.ndarray:
     """Finished uint8 RGB frame at time t."""
     fps = project.settings.fps or 30
@@ -361,9 +370,10 @@ def render_frame(
     content_end = project.content_end
     if project.settings.end_card and t >= content_end > 0:
         return _end_card(project, t, w, h, src, content_end)
-    canvas = composite_tracks(project, t, w, h, src, seed)
     grade = [o.model_dump(mode="json") for o in project.grade if not OPS[o.op].geometry and OPS[o.op].category != "subject"]
-    frame = PLANS.get(grade).finish(canvas, seed)
+    frame = _gpu_frame(project, t, w, h, src, seed, grade) if use_gpu else None
+    if frame is None:
+        frame = PLANS.get(grade).finish(composite_tracks(project, t, w, h, src, seed), seed)
     s = project.settings
     total = project.duration
     fade = 1.0
