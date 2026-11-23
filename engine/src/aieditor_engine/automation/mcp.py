@@ -42,7 +42,7 @@ TOOLS = [
      "inputSchema": {"type": "object", "properties": {}}},
     {"name": "run_recipe",
      "description": "Edit local video/photo files. Recipes: reel (long video -> vertical shorts), highlights, captions, "
-                    "video_edit (needs prompt), photo_edit, render_program (options.program = Edit DSL), transcribe. "
+                    "photo_edit, render_program (options.program = Edit DSL), transcribe. "
                     "Returns the job with the paths of the result files.",
      "inputSchema": {"type": "object", "required": ["files"], "properties": {
          "recipe": {"type": "string"},

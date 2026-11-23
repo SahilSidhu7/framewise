@@ -156,7 +156,7 @@ def test_api_auth_scopes_and_validation(home, image_file, tmp_path):
         assert c.post("/v1/jobs", headers=auth, json=body).status_code == 403  # local path needs `local`
         assert c.post("/v1/jobs", headers=local, json={**body, "output_dir": str(tmp_path)}).status_code == 202
         assert c.post("/v1/jobs", headers=local, json={**body, "recipe": "nope"}).status_code == 422
-        assert c.post("/v1/jobs", headers=local, json={**body, "recipe": "video_edit"}).status_code == 422  # needs prompt
+        assert c.post("/v1/jobs", headers=local, json={**body, "recipe": "video_edit"}).status_code == 422  # removed recipe
         assert c.post("/v1/jobs", headers=local, json={**body, "options": {"quality": 5}}).status_code == 422
         assert c.post("/v1/jobs", headers=auth, json={"recipe": "reel", "inputs": ["f_0123456789abcdef"]}).status_code == 404
         assert c.post("/v1/jobs", headers=auth, json={"recipe": "reel", "inputs": ["ftp://x/y.mp4"]}).status_code in (403, 422)

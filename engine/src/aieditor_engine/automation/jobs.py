@@ -87,7 +87,7 @@ class WebhookSpec(BaseModel):
 
 
 class JobRequest(BaseModel):
-    recipe: str | None = Field(None, description="reel, highlights, captions, video_edit, photo_edit, render_program, transcribe")
+    recipe: str | None = Field(None, description="reel, highlights, captions, photo_edit, render_program, transcribe")
     prompt: str | None = Field(None, max_length=500)
     inputs: list[InputRef | str] = Field(min_length=1, max_length=50,
                                          description="file ids (f_...), URLs, or local paths; numbered 1..n in this order")

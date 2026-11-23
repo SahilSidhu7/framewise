@@ -402,13 +402,6 @@ export class EngineClient {
   speechStatus = () => this.request<{ available: boolean; model: string | null }>("GET", "/ai/speech/status");
   autoCaptions = (style: string) => this.request<{ job: string }>("POST", "/timeline/auto_captions", { style });
   timelineDsl = () => this.request<{ program: string; duration: number }>("GET", "/timeline/dsl");
-  aiVideo = (prompt: string, style?: string | null, output?: OutputOptions | null) =>
-    this.request<{ variations: VideoVariation[]; brief: string; llm_error: string | null; error?: string }>("POST", "/ai/video", {
-      prompt,
-      variations: 3,
-      style: style || null,
-      output: output || null,
-    });
   aiReels = (body: { count?: number; style?: string | null; output?: OutputOptions | null; captions?: boolean | null }) =>
     this.request<{ variations: ReelVariation[]; aspect: string; style: string; export: string | null; tracking: string | null }>(
       "POST",

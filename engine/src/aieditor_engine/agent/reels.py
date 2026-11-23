@@ -18,7 +18,7 @@ from ..video.vdsl import ASPECTS
 from .cleanup import keep_ranges, saved_seconds
 from .highlights import Moment, find_moments
 from .options import OptionError, OutputOptions, outputs, video_styles
-from .video_planner import SAFE_VIDEO_LOOKS, MediaInfo, VideoContext
+from .media_context import SAFE_VIDEO_LOOKS, MediaInfo, VideoContext
 
 DEFAULT_STYLE = "energetic_reel"
 PUNCH_IN = 1.07  # alternate tightened pieces between normal and slightly zoomed, so jump cuts look intended

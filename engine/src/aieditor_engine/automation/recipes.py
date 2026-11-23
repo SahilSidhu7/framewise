@@ -7,7 +7,6 @@ own small options model, and writes its results into the job's `out/` folder.
     reel            one long video -> N ranked vertical clips (highlights + reframe + captions)
     highlights      the best moments as JSON, optionally each cut as a clip
     captions        burned-in captions + .srt subtitles
-    video_edit      prompt (+ style/output) -> edited video, N versions
     photo_edit      prompt (+ style/output) -> edited photos, N versions each
     render_program  run a Video or Photo Edit DSL program you wrote
     transcribe      speech -> .srt, .txt and word-timed .json
@@ -62,10 +61,6 @@ class CaptionOptions(BaseModel):
     style: str = Field("bold_pop", description=f"One of {', '.join(CAPTION_STYLES)}")
     burn: bool = Field(True, description="Burn captions into the video (else only .srt)")
     source: int | None = Field(None, ge=1)
-
-
-class VideoEditOptions(BaseModel):
-    pass
 
 
 class PhotoEditOptions(BaseModel):
@@ -287,32 +282,6 @@ def run_captions(ctx: JobContext) -> dict[str, Any]:
     return {"segments": len(tr.get("segments", [])), "language": tr.get("language")}
 
 
-def run_video_edit(ctx: JobContext) -> dict[str, Any]:
-    from ..agent.video_planner import plan_video
-
-    if not ctx.prompt:
-        raise RecipeError("video_edit needs a prompt")
-    if not _videos(ctx) and not any(m.kind == MediaKind.IMAGE for m in ctx.session.bus.project.media.values()):
-        raise RecipeError("video_edit needs video or photo inputs")
-    s = ctx.session
-    ctx.stage("Understanding the footage", 0.0, 0.3)
-    vc = s.video_context(transcribe_speech=True)
-    versions = (ctx.output.versions if ctx.output and ctx.output.versions else 1)
-    try:
-        res = plan_video(ctx.prompt, vc, versions, style=ctx.style, output=ctx.output, styles_dir=s.styles_dir)
-    except OptionError as exc:
-        raise RecipeError(str(exc)) from exc
-    edits = []
-    vs = res["variations"][:versions]
-    for i, v in enumerate(vs, start=1):
-        prog = ctx.stage(f"Rendering version {i} of {len(vs)}", 0.3 + 0.7 * (i - 1) / len(vs), 0.3 + 0.7 * i / len(vs))
-        _apply_video(ctx, v["program"])
-        _export(ctx, f"edit_{i}.mp4", prog, rationale=v.get("rationale", ""))
-        edits.append({"file": f"edit_{i}.mp4", "rationale": v.get("rationale", ""), "program": v["program"], "source": v.get("source")})
-    ctx.write_json("edits.json", edits)
-    return {"versions": len(edits), "llm_error": res.get("llm_error")}
-
-
 def _photo_ids(ctx: JobContext) -> list[str]:
     media = ctx.session.bus.project.media
     ids = [mid for mid in media if media[mid].kind == MediaKind.IMAGE]
@@ -405,8 +374,6 @@ RECIPES: dict[str, Recipe] = {r.name: r for r in (
            HighlightOptions, run_highlights),
     Recipe("captions", "Add captions", "Transcribe speech; burn styled captions into the video and write an .srt file.",
            CaptionOptions, run_captions),
-    Recipe("video_edit", "Edit video from a prompt", "Describe the edit; style and output options are hard constraints.",
-           VideoEditOptions, run_video_edit, needs_prompt=True, media="any"),
     Recipe("photo_edit", "Edit photos from a prompt", "Fix and style each photo; one file per photo and version.",
            PhotoEditOptions, run_photo_edit, media="photo"),
     Recipe("render_program", "Render a DSL program", "Run your own Video Edit DSL (or Photo Edit DSL for photos). Inputs are numbered 1..n.",
@@ -415,7 +382,7 @@ RECIPES: dict[str, Recipe] = {r.name: r for r in (
            TranscribeOptions, run_transcribe),
 )}
 
-ALIASES = {"reels": "reel", "highlight": "highlights", "caption": "captions", "edit": "video_edit", "photo": "photo_edit",
+ALIASES = {"reels": "reel", "highlight": "highlights", "caption": "captions", "photo": "photo_edit",
            "render": "render_program", "program": "render_program", "transcript": "transcribe"}
 
 
@@ -436,20 +403,20 @@ def parse_options(recipe: Recipe, raw: dict[str, Any] | None) -> BaseModel:
 
 
 def guess_recipe(prompt: str | None, files: list[Path]) -> str:
-    """No recipe given: photos -> photo_edit, otherwise a prompt means video_edit."""
+    """No recipe given: photos -> photo_edit, a video -> reel."""
     from ..media.probe import IMAGE_EXTS
 
     if files and all(f.suffix.lower() in IMAGE_EXTS for f in files):
         return "photo_edit"
-    if prompt:
-        return "video_edit"
-    raise RecipeError("give a recipe (or a prompt)")
+    if files:
+        return "reel"
+    raise RecipeError("give a recipe and input files")
 
 
 def project_kind(recipe: Recipe, files: list[Path]) -> ProjectKind:
     from ..media.probe import IMAGE_EXTS
 
-    if recipe.media == "photo" or (files and all(f.suffix.lower() in IMAGE_EXTS for f in files) and recipe.name != "video_edit"):
+    if recipe.media == "photo" or (files and all(f.suffix.lower() in IMAGE_EXTS for f in files)):
         return ProjectKind.PHOTO
     return ProjectKind.VIDEO
 

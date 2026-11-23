@@ -21,7 +21,6 @@ from ..imaging.recipes import load_recipes
 
 if TYPE_CHECKING:
     from .planner import Hints
-    from .video_planner import VideoContext, VideoHints
 
 STYLE_DIR = Path(__file__).resolve().parent.parent / "styles"
 PACES = ("fast", "medium", "slow")
@@ -114,63 +113,6 @@ def catalog(extra_dir: Path | None = None) -> dict[str, Any]:
 
 
 # --------------------------------------------------------------------- video
-
-
-def apply_video_options(
-    h: VideoHints, ctx: VideoContext, style: str | None, output: OutputOptions | None, extra_dir: Path | None = None
-) -> VideoHints:
-    """Overlay the chosen options on the hints read from the prompt."""
-    if style and style != "auto":
-        styles = video_styles(extra_dir)
-        if style not in styles:
-            raise OptionError(f"unknown style `{style}`; choose one of {', '.join(styles)}")
-        st = styles[style]
-        speech = any(m.speech for m in ctx.visual)
-        songs = ctx.songs
-        music = h.music
-        if st["music"] == "off":
-            music = None
-        elif st["music"] == "on" and songs:
-            music = songs[0].number
-        aspect = h.aspect or st["aspect"]
-        h = replace(
-            h,
-            pace=st["pace"],
-            fixed_pace=st["pace"],
-            transition=st["transition"],
-            # words in the prompt may still pick among the style's looks; otherwise the style's order wins
-            looks=tuple([n for n in h.looks if n in st["looks"]] + [n for n in st["looks"] if n not in h.looks]) or h.looks,
-            captions=(st["captions"] or h.captions) if (h.captions and speech) else h.captions,
-            letterbox=st["letterbox"],
-            highlights=h.highlights or st["highlights"],
-            music=music,
-            aspect=aspect,
-            length=h.length or st["length"],
-            style_captions=st["captions"],
-        )
-    if output:
-        if output.platform:
-            plats = outputs()["video"]
-            if output.platform not in plats:
-                raise OptionError(f"unknown output `{output.platform}`; choose one of {', '.join(plats)}")
-            plat = plats[output.platform]
-            h = replace(h, aspect=plat.get("aspect") or h.aspect)
-            cap = plat.get("max_length")
-            if cap and (h.length or 0) > cap:
-                h = replace(h, length=float(cap))
-            if cap and h.length is None and output.length is None and h.highlights:
-                h = replace(h, length=float(plat.get("default_length") or cap))
-        if output.length:
-            h = replace(h, length=float(output.length))
-        if output.captions is not None:
-            speech = any(m.speech for m in ctx.visual)
-            default = h.style_captions or ("bold_pop" if h.pace == "fast" else "clean")
-            h = replace(h, captions=(h.captions or default) if (output.captions and speech) else None)
-        if output.music is not None:
-            h = replace(h, music=(h.music or (ctx.songs[0].number if ctx.songs else None)) if output.music else None)
-    if h.letterbox and (h.aspect or "16:9") != "16:9":
-        h = replace(h, letterbox=None)  # bars only make sense on widescreen
-    return h
 
 
 def style_from_reference(analysis: dict[str, Any], title: str) -> dict[str, Any]:

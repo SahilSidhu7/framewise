@@ -221,7 +221,7 @@ class Session:
 
     def video_context(self, transcribe_speech: bool = False) -> Any:
         """Everything the video planner needs (analyses are cached per media)."""
-        from .agent.video_planner import MediaInfo, VideoContext
+        from .agent.media_context import MediaInfo, VideoContext
         from .agent.whisper import WhisperUnavailable, whisper_status
         from .video.vdsl import timeline_to_dsl
 

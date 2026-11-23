@@ -6,14 +6,6 @@ import { SubjectModelNote, pointOnImage } from "./Subject";
 type Tab = "ai" | "clip" | "look" | "text" | "export";
 type RunFn = (name: string, params: Record<string, unknown>) => Promise<Record<string, unknown> | undefined>;
 
-const AI_CHIPS = [
-  "Make an energetic reel with music",
-  "Cinematic video with captions",
-  "Combine the clips into a short story",
-  "Aesthetic slow vlog",
-  "Vintage film look, calm pace",
-  "Highlights in 30 seconds",
-];
 const TRANSITIONS = ["none", "crossfade", "fade_black", "fade_white", "wipe_left", "wipe_right", "slide_left", "slide_up", "zoom", "blur"];
 const MOTIONS = ["none", "zoom_in", "zoom_out", "pan_left", "pan_right"];
 const PRESETS: [string, string][] = [
@@ -44,7 +36,7 @@ export function VideoEditor({ client, snapshot, onNotice }: Props) {
   const { project, revision } = snapshot;
   const duration = projectDuration(project);
   const fps = project.settings.fps || 30;
-  const [tab, setTab] = useState<Tab>("ai");
+  const [tab, setTab] = useState<Tab>("clip");
   const [playhead, setPlayhead] = useState(0);
   const [playing, setPlaying] = useState(false);
   const [selClip, setSelClip] = useState<string | null>(null);
@@ -267,7 +259,7 @@ export function VideoEditor({ client, snapshot, onNotice }: Props) {
             {empty ? (
               <div className="v-empty muted">
                 <p>Your timeline is empty.</p>
-                <p className="small">Import clips, then describe the edit on the right, or double-click a clip to place it yourself.</p>
+                <p className="small">Import clips, then double-click one to place it on the timeline. For short clips from a long video, use the Clips tab.</p>
               </div>
             ) : (
               <>
@@ -326,7 +318,7 @@ export function VideoEditor({ client, snapshot, onNotice }: Props) {
           <nav className="tabs">
             {(["ai", "clip", "look", "text", "export"] as Tab[]).map((t) => (
               <button key={t} className={tab === t ? "active" : ""} onClick={() => setTab(t)}>
-                {{ ai: "Auto edit", clip: "Clip", look: "Color", text: "Text", export: "Export" }[t]}
+                {{ ai: "Clips", clip: "Clip", look: "Color", text: "Text", export: "Export" }[t]}
               </button>
             ))}
           </nav>
@@ -583,10 +575,9 @@ function Timeline(props: {
   );
 }
 
-// ------------------------------------------------------------------- AI tab
+// ---------------------------------------------------------------- Clips tab
 
 function VideoAi({ client, snapshot, onNotice }: { client: EngineClient; snapshot: Snapshot; onNotice: (m: string | null) => void }) {
-  const [prompt, setPrompt] = useState("");
   const [busy, setBusy] = useState(false);
   const [vars, setVars] = useState<VideoVariation[]>([]);
   const [applied, setApplied] = useState<number | null>(null);
@@ -597,7 +588,6 @@ function VideoAi({ client, snapshot, onNotice }: { client: EngineClient; snapsho
   const [platform, setPlatform] = useState<string>("auto");
   const [length, setLength] = useState<number | null>(null);
   const [captions, setCaptions] = useState<boolean | null>(null);
-  const hasMedia = Object.keys(snapshot.project.media).length > 0;
   const hasVideo = Object.values(snapshot.project.media).some((m) => m.kind === "video");
 
   useEffect(() => {
@@ -663,43 +653,13 @@ function VideoAi({ client, snapshot, onNotice }: { client: EngineClient; snapsho
     }
   };
 
-  const go = async (text: string) => {
-    if (!text.trim()) return;
-    setBusy(true);
-    setVars([]);
-    setApplied(null);
-    setHeading(text);
-    try {
-      const res = await client.aiVideo(text, chosenStyle, output());
-      if (res.error) throw new Error(res.error);
-      setVars(res.variations);
-      if (res.variations.length) await apply(0, res.variations);
-    } catch (e) {
-      onNotice(e instanceof Error ? e.message : String(e));
-    } finally {
-      setBusy(false);
-    }
-  };
-
   return (
     <div className="ai">
       <div className="row between">
-        <h4 style={{ margin: 0 }}>Describe the edit</h4>
+        <h4 style={{ margin: 0 }}>Clips from a long video</h4>
         <span className="muted small">{status}</span>
       </div>
-      <textarea
-        rows={3}
-        placeholder={hasMedia ? 'e.g. "fast travel reel on the beat with bold captions"' : "Import your clips first"}
-        value={prompt}
-        onChange={(e) => setPrompt(e.target.value)}
-        onKeyDown={(e) => {
-          if (e.key === "Enter" && !e.shiftKey) {
-            e.preventDefault();
-            go(prompt);
-          }
-        }}
-        disabled={!hasMedia}
-      />
+      <p className="muted small">Finds the best moments of your longest video and turns each into a short clip: pauses cut, speaker kept in frame, captions.</p>
       {options && (
         <div className="ai-options">
           <label>
@@ -748,22 +708,11 @@ function VideoAi({ client, snapshot, onNotice }: { client: EngineClient; snapsho
         </div>
       )}
       <div className="row end">
-        <button disabled={busy || !hasVideo} onClick={reels} title="Find the best moments of your longest video and turn each into a short vertical clip">
-          Make reels
-        </button>
-        <button className="primary" disabled={busy || !hasMedia || !prompt.trim()} onClick={() => go(prompt)}>
-          {busy ? "Editing…" : "Edit my video"}
+        <button className="primary" disabled={busy || !hasVideo} onClick={reels}>
+          {busy ? "Finding moments…" : "Make clips"}
         </button>
       </div>
-      <div className="examples">
-        <span className="label">Examples</span>
-        {AI_CHIPS.slice(0, 4).map((c) => (
-          <button key={c} type="button" className="example" disabled={busy || !hasMedia} onClick={() => { setPrompt(c); go(c); }}>
-            {c}
-          </button>
-        ))}
-      </div>
-      {busy && <p className="muted small">Reviewing your clips and planning the edit…</p>}
+      {busy && <p className="muted small">Listening and watching for the best moments…</p>}
       {vars.length > 0 && (
         <div className="variations">
           <h4>{heading}</h4>

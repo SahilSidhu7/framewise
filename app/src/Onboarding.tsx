@@ -113,8 +113,8 @@ export function Onboarding({ client, licence, onLicence, onDone }: Props) {
     >
         {step === 0 && (
           <div className="ob-body">
-            <h1>Edit photos and video by describing the result.</h1>
-            <p className="lead">Pick your clips, describe the edit in plain words, and choose from a few versions. You can change anything by hand afterwards.</p>
+            <h1>Edit photos and video. Free, on your own computer.</h1>
+            <p className="lead">Fix and style photos by describing the result, edit video on the timeline, and turn long videos into short clips automatically.</p>
             <ul className="ticks">
               <li>Works on this computer. Your photos and videos are never uploaded.</li>
               <li>Every automatic edit can be undone with one click.</li>

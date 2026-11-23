@@ -25,7 +25,7 @@ import threading
 from pathlib import Path
 from typing import Any
 
-SHORTCUTS = {"reel": "reel", "highlights": "highlights", "captions": "captions", "edit": "video_edit",
+SHORTCUTS = {"reel": "reel", "highlights": "highlights", "captions": "captions", 
              "photo": "photo_edit", "render": "render_program", "transcribe": "transcribe"}
 DEFAULT_PORT = 8765
 

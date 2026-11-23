@@ -25,7 +25,7 @@ A local, beginner-first AI photo and video editor. See [PLAN.md](PLAN.md) for th
   - audio mix with crossfades, music ducking under speech and -14 LUFS loudness
   - color grades baked into a 3D LUT per export; frames render in parallel (1080p about 17 fps on an RTX 4060 laptop)
   - export to H.264 + AAC (NVENC/QSV/AMF first, software fallback), tagged BT.709
-- **Video AI director:** the model picks the intent (aspect, pace, transitions, look, captions, title, music). Code then chooses the best moments, cuts on the music beat, avoids jump cuts and keeps whole sentences.
+- **Clipping:** one long video in, short clips out: best moments ranked by speech, sound and picture, pauses and filler words cut, speaker kept in frame, captions.
   - Auto-captions use local whisper.cpp.
 - **Beginner UI:**
   - AI prompt and one-click chips

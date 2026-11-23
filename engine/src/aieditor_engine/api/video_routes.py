@@ -15,7 +15,6 @@ from pydantic import BaseModel, Field
 
 from ..agent.options import OptionError, OutputOptions, catalog, save_style, style_from_reference
 from ..agent.reels import make_reels
-from ..agent.video_planner import plan_video
 from ..agent.whisper import WhisperUnavailable, whisper_status
 from ..core.commands import CommandError
 from ..core.project import EditOp, MediaKind, Project
@@ -49,13 +48,6 @@ class VideoExportBody(BaseModel):
     preset: str = "project"
     quality: Literal["high", "standard", "small"] = "high"
     fps: float | None = Field(None, gt=0, le=120)
-
-
-class AiVideoBody(BaseModel):
-    prompt: str = Field(min_length=1, max_length=500)
-    variations: int = Field(3, ge=1, le=5)
-    style: str | None = Field(None, description="Editing style id from /ai/options, or auto")
-    output: OutputOptions | None = None
 
 
 class ReelsBody(BaseModel):
@@ -271,16 +263,6 @@ def register(app: FastAPI, require, secured: list) -> None:  # noqa: ANN001 - Fa
         return {"job": session.start_job("captions", job, label="Auto captions")}
 
     # ------------------------------------------------------------------ AI
-    @app.post("/ai/video", dependencies=secured)
-    def ai_video(body: AiVideoBody) -> dict[str, Any]:
-        """Plan whole-video edits. Returns variations (Video DSL); nothing is applied."""
-        session: Session = require()
-        ctx = session.video_context(transcribe_speech=True)  # cached; also lets the director cut on sentences
-        try:
-            return plan_video(body.prompt, ctx, body.variations, style=body.style, output=body.output, styles_dir=session.styles_dir)
-        except OptionError as exc:
-            raise HTTPException(422, str(exc)) from exc
-
     @app.get("/ai/options", dependencies=secured)
     def ai_options() -> dict[str, Any]:
         """Editing styles and desired outputs for the chips next to the prompt box."""

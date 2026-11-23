@@ -21,7 +21,7 @@ from aieditor_engine.agent.options import (
 )
 from aieditor_engine.agent.planner import Hints, plan
 from aieditor_engine.agent.reels import make_reels
-from aieditor_engine.agent.video_planner import MediaInfo, VideoContext, plan_video, video_hints
+from aieditor_engine.agent.media_context import MediaInfo, VideoContext
 from aieditor_engine.core.project import MediaItem, MediaKind, Project, ProjectKind
 from aieditor_engine.video.reframe import _camera_path, reframe_keys, subject_track, x_param
 from aieditor_engine.video.vdsl import apply_video_program
@@ -73,35 +73,6 @@ def test_catalog_and_presets_are_valid():
     assert all(s["looks"] for s in c["video"]["styles"])  # every look name in the YAML exists
     assert {o["id"] for o in c["video"]["outputs"]} >= {"tiktok", "youtube", "instagram_reel", "square_post"}
     assert {s["id"] for s in c["photo"]["styles"]} >= {"natural", "food", "moody", "black_white"}
-
-
-def test_style_and_output_are_hard_constraints():
-    ctx = VideoContext([_broll(1), _broll(2, 9.0)])
-    r = plan_video("make it nice", ctx, 3, use_llm=False, style="cinematic", output=OutputOptions(platform="tiktok", length=12, versions=2))
-    assert len(r["variations"]) == 2
-    for v in r["variations"]:
-        lines = v["program"].splitlines()
-        assert "aspect 9:16" in lines and not any(ln.startswith("letterbox") for ln in lines)  # bars only on widescreen
-        assert any("transition=crossfade" in ln for ln in lines)  # cinematic = slow crossfades
-        assert any(ln.startswith("look ") and ln.split()[1] in video_styles()["cinematic"]["looks"] for ln in lines)
-    # the prompt alone would have been a fast reel; the explicit style wins
-    fast = plan_video("energetic reel", ctx, 1, use_llm=False, style="documentary")
-    assert "transition=crossfade" in fast["variations"][0]["program"]
-    with pytest.raises(OptionError):
-        plan_video("x", ctx, 1, use_llm=False, style="nope")
-    with pytest.raises(OptionError):
-        plan_video("x", ctx, 1, use_llm=False, output=OutputOptions(platform="myspace"))
-
-
-def test_output_captions_and_music_switches():
-    song = MediaInfo(3, "s", "song.mp3", "audio", 60.0, music={"bpm": 120, "beats": [i * 0.5 for i in range(120)]})
-    ctx = VideoContext([_talk_media(1), _broll(2), song])
-    off = plan_video("vlog with subtitles and music", ctx, 1, use_llm=False, output=OutputOptions(captions=False, music=False))
-    prog = off["variations"][0]["program"]
-    assert "captions" not in prog and "music" not in prog
-    on = plan_video("edit this", ctx, 1, use_llm=False, style="tutorial", output=OutputOptions(captions=True))
-    assert "captions boxed" in on["variations"][0]["program"]  # the style's caption look
-    assert "music" not in on["variations"][0]["program"]  # tutorial style has music off
 
 
 def test_photo_options():
@@ -252,8 +223,3 @@ def test_reels_from_one_long_video_apply_cleanly():
     assert "captions" not in no_caps["variations"][0]["program"]
     with pytest.raises(ValueError):
         make_reels(VideoContext([song]), use_llm=False)
-
-
-def test_hints_dataclass_has_option_fields():
-    h = video_hints("make a reel", VideoContext([_broll(1)]))
-    assert h.fixed_pace is None and h.style_captions is None

@@ -22,7 +22,7 @@ from typing import Any
 import numpy as np
 
 from .llm import LLM, LLMUnavailable
-from .video_planner import MediaInfo
+from .media_context import MediaInfo
 
 log = logging.getLogger(__name__)
 

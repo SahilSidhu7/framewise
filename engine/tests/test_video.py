@@ -9,12 +9,6 @@ import numpy as np
 import pytest
 from fastapi.testclient import TestClient
 
-from aieditor_engine.agent.video_planner import (
-    MediaInfo,
-    VideoContext,
-    plan_video,
-    video_hints,
-)
 from aieditor_engine.api.server import create_app
 from aieditor_engine.core.bus import CommandBus
 from aieditor_engine.core.commands import CommandError
@@ -275,53 +269,6 @@ def test_caption_grouping():
     assert all(a[1] <= b[0] + 1e-6 for a, b in zip(short, short[1:]))  # never overlap
 
 
-# ------------------------------------------------------------------ planner
-
-
-def _ctx(clips, speech=False) -> VideoContext:
-    media = []
-    for n, key in enumerate(("red", "blue"), start=1):
-        a = analyze_video(clips[key])
-        tr = {"words": [{"start": 0.2, "end": 0.6, "text": "hello"}, {"start": 0.6, "end": 1.0, "text": "world."}, {"start": 1.0, "end": 1.5, "text": "bye"}],
-              "segments": [{"start": 0.2, "end": 1.0, "text": "hello world."}, {"start": 1.0, "end": 1.5, "text": "bye"}]} if speech and n == 1 else None
-        media.append(MediaInfo(n, key, key, "video", 2.0, "landscape", a, {"speech_likely": speech and n == 1}, tr))
-    media.append(MediaInfo(3, "song", "song", "audio", 12.0, music=analyze_music(clips["song"])))
-    return VideoContext(media)
-
-
-def test_hints():
-    ctx = VideoContext([MediaInfo(1, "a", "a", "video", 5, "portrait"), MediaInfo(2, "s", "s", "audio", 30)])
-    h = video_hints("make an energetic tiktok with music", ctx)
-    assert (h.aspect, h.pace, h.transition, h.music) == ("9:16", "fast", "none", 2)
-    h = video_hints('cinematic wedding film titled "Anna & Tom"', ctx)
-    assert (h.pace, h.letterbox, h.title) == ("slow", 2.39, "Anna & Tom")
-    assert video_hints("no music please", ctx).music is None
-
-
-@pytest.mark.parametrize("prompt", ["make an energetic reel with music", "cinematic video with captions", "combine the clips"])
-def test_rule_planner_programs_apply(clips, prompt):
-    ctx = _ctx(clips, speech=True)
-    res = plan_video(prompt, ctx, 3, use_llm=False)
-    assert 1 <= len(res["variations"]) <= 3
-    for v in res["variations"]:
-        p = _project(clips)
-        out = apply_video_program(p, v["program"], transcripts={"red": ctx.media[0].transcript})
-        assert out["clips"] >= 1
-    if "captions" in prompt:
-        assert "captions" in res["variations"][0]["program"]
-    if "reel" in prompt:
-        prog = res["variations"][0]["program"]
-        assert "aspect 9:16" in prog and "music 3" in prog and "transition=" not in prog
-
-
-def test_fast_edit_never_repeats_same_clip_back_to_back(clips):
-    ctx = _ctx(clips)
-    prog = plan_video("fast montage with music", ctx, 1, use_llm=False)["variations"][0]["program"]
-    order = [ln.split()[1] for ln in prog.splitlines() if ln.startswith("clip ")]
-    assert len(order) >= 2
-    assert all(a != b for a, b in zip(order, order[1:])) or len(set(order)) == 1
-
-
 # ---------------------------------------------------------------------- API
 
 
@@ -334,9 +281,7 @@ def test_video_api_flow(clips, tmp_path):
         assert len(r["imported"]) == 3
         session: Session = app.state.engine.session
         session.wait_for_jobs(60)
-        plan = c.post("/ai/video", json={"prompt": "energetic reel with music"}, headers=h).json()
-        assert plan["variations"]
-        prog = plan["variations"][0]["program"]
+        prog = "aspect 9:16\nclip 1 0-2\nclip 2 0-2 transition=crossfade:0.5\nmusic 3 volume=0.8"
         f = c.get("/timeline/frame", params={"t": 1, "max": 200, "program": prog}, headers=h)
         assert f.status_code == 200 and f.headers["content-type"] == "image/jpeg"
         assert c.post("/ai/video/apply", json={"program": prog}, headers=h).status_code == 200
@@ -344,17 +289,13 @@ def test_video_api_flow(clips, tmp_path):
         # prompt options, reels and "edit like this"
         opts = c.get("/ai/options", headers=h).json()
         assert {s["id"] for s in opts["video"]["styles"]} >= {"cinematic", "energetic_reel"}
-        styled = c.post("/ai/video", json={"prompt": "edit this", "style": "cinematic", "output": {"platform": "square_post", "versions": 2}}, headers=h).json()
-        assert len(styled["variations"]) == 2 and all("aspect 1:1" in v["program"] for v in styled["variations"])
-        assert c.post("/ai/video", json={"prompt": "x", "style": "nope"}, headers=h).status_code == 422
+        assert c.post("/ai/video", json={"prompt": "x"}, headers=h).status_code in (404, 405)  # the prompt director is gone
         reels = c.post("/ai/reels", json={"count": 2, "length": 5, "output": {"platform": "tiktok"}}, headers=h).json()
         assert reels["aspect"] == "9:16" and reels["variations"] and "aspect 9:16" in reels["variations"][0]["program"]
         assert c.post("/ai/video/apply", json={"program": reels["variations"][0]["program"]}, headers=h).status_code == 200
         st = c.post("/ai/styles/from_video", json={"media_number": 1, "name": "Red test"}, headers=h).json()
         assert st["id"] == "red_test" and any(s["id"] == "red_test" for s in c.get("/ai/options", headers=h).json()["video"]["styles"])
         assert c.post("/ai/styles/from_video", json={"media_number": 3, "name": "song"}, headers=h).status_code == 422
-        photo = c.post("/ai/video", json={"prompt": "x", "output": {"platform": "instagram_post"}}, headers=h)
-        assert photo.status_code == 422  # a photo output is not a video output
         assert c.get("/timeline/frame", params={"t": 0.5, "max": 200, "grade": "look noir"}, headers=h).status_code == 200
         bad = c.get("/timeline/frame", params={"t": 0, "grade": "look nope"}, headers=h)
         assert bad.status_code == 422
