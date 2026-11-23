@@ -1,11 +1,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { LivePlayer, liveSupported } from "./live/LivePlayer";
+import { LayersPanel, type Tool } from "./layers/LayersPanel";
+import { ViewerOverlay } from "./layers/ViewerOverlay";
+import { activeOn, applyValues, commitValues, keyTimes, replaceClip, type Values } from "./layers/edit";
 import { clipDuration, EngineClient, isTauri, projectDuration, type Caption, type Clip, type EngineEvent, type LookInfo, type Snapshot, type Track, type VideoVariation, type AiOptions, type OutputOptions } from "./engine";
 
 import { SubjectModelNote, pointOnImage } from "./Subject";
 
-type Tab = "ai" | "clip" | "look" | "text" | "export";
+type Tab = "ai" | "clip" | "layers" | "look" | "text" | "export";
 type RunFn = (name: string, params: Record<string, unknown>) => Promise<Record<string, unknown> | undefined>;
 
 const TRANSITIONS = ["none", "crossfade", "fade_black", "fade_white", "wipe_left", "wipe_right", "slide_left", "slide_up", "zoom", "blur"];
@@ -54,6 +57,9 @@ export function VideoEditor({ client, snapshot, onNotice }: Props) {
   const [liveFailed, setLiveFailed] = useState(false);
   const [liveMissing, setLiveMissing] = useState<string[]>([]);
   const [jump, setJump] = useState(0);
+  const [tool, setTool] = useState<Tool>("move");
+  // a layer being dragged in the viewer: drawn live before it is saved
+  const [draft, setDraft] = useState<Clip | null>(null);
   // live preview: the timeline plays at once in WebGL2 (engine shaders); else a rendered preview video
   const live = !liveFailed && liveSupported();
   const pickImg = useRef<HTMLImageElement>(null);
@@ -78,6 +84,8 @@ export function VideoEditor({ client, snapshot, onNotice }: Props) {
     return m;
   }, [project]);
   const selected = selClip ? clipById.get(selClip) : undefined;
+  useEffect(() => setDraft(null), [revision, selClip]);
+  const shownProject = useMemo(() => (draft ? replaceClip(project, draft) : project), [project, draft]);
   const caption = project.captions.find((c) => c.id === selCaption);
 
   // ---- engine events: render jobs
@@ -223,10 +231,15 @@ export function VideoEditor({ client, snapshot, onNotice }: Props) {
       else if (e.key === "Home") seek(0);
       else if (e.key === "End") seek(duration);
       else if (e.key === "Escape") setPicking(false);
+      else if (e.key === "v" || e.key === "V") setTool("move");
+      else if ((e.key === "p" || e.key === "P") && selected && selected.track.kind !== "audio") {
+        setTool("pen");
+        setTab("layers");
+      }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [playing, play, pause, split, removeSelected, seek, playhead, fps, duration]);
+  }, [playing, play, pause, split, removeSelected, seek, playhead, fps, duration, selected]);
 
   // the exact engine frame follows the playhead only while stopped (the live player shows playback)
   const exactAt = useRef(0);
@@ -235,6 +248,13 @@ export function VideoEditor({ client, snapshot, onNotice }: Props) {
   useEffect(() => setFrameLoading(true), [frameSrc]);
 
   const empty = project.tracks.every((t) => t.clips.length === 0);
+  // handles show on the selected layer when it is under the playhead and playback is stopped
+  const overlayClip = (() => {
+    if (playing || picking || !selected || selected.track.kind === "audio" || selected.track.hidden) return null;
+    const shown = shownProject.tracks.find((t) => t.id === selected.track.id);
+    const c = shown && activeOn(shown, playhead);
+    return c && c.id === selected.clip.id ? c : null;
+  })();
 
   // picking a subject: show the selected clip's original frame (not the cropped/moved result) and take a click on it
   const pickClip = selected && selected.track.kind !== "audio" && project.media[selected.clip.media_id]?.kind === "video" ? selected : undefined;
@@ -292,7 +312,7 @@ export function VideoEditor({ client, snapshot, onNotice }: Props) {
                 {live && (
                   <LivePlayer
                     client={client}
-                    project={project}
+                    project={shownProject}
                     revision={revision}
                     playhead={playhead}
                     playing={playing}
@@ -312,11 +332,34 @@ export function VideoEditor({ client, snapshot, onNotice }: Props) {
                 )}
                 {frameSrc && !picking && (
                   <img
-                    className={live ? `exact ${playing || frameLoading ? "hidden" : ""}` : `${playing ? "hidden" : ""} ${frameLoading ? "loading" : ""}`}
+                    className={live ? `exact ${playing || frameLoading || draft ? "hidden" : ""}` : `${playing ? "hidden" : ""} ${frameLoading ? "loading" : ""}`}
                     src={frameSrc}
                     alt=""
                     onLoad={() => setFrameLoading(false)}
                     onError={() => setFrameLoading(false)}
+                  />
+                )}
+                {overlayClip && (
+                  <ViewerOverlay
+                    project={shownProject}
+                    clip={overlayClip}
+                    t={playhead}
+                    tool={tool}
+                    locked={!!selected?.track.locked}
+                    onDraft={(d) => {
+                      const base = selected?.clip;
+                      if (!d || !base) return setDraft(null);
+                      setDraft(d.masks ? { ...base, masks: d.masks } : applyValues(base, d.values ?? {}, playhead));
+                    }}
+                    onCommit={async (v: Values) => {
+                      if (selected) await commitValues(run, selected.clip, v, playhead);
+                      setDraft(null);
+                    }}
+                    onMasks={async (masks) => {
+                      if (selected) await run("clip.set_masks", { clip_id: selected.clip.id, masks });
+                      setDraft(null);
+                    }}
+                    onPenDone={() => setTool("move")}
                   />
                 )}
                 {!live && preview && (
@@ -358,15 +401,30 @@ export function VideoEditor({ client, snapshot, onNotice }: Props) {
 
         <aside className="photo-panel v-panel">
           <nav className="tabs">
-            {(["ai", "clip", "look", "text", "export"] as Tab[]).map((t) => (
+            {(["ai", "clip", "layers", "look", "text", "export"] as Tab[]).map((t) => (
               <button key={t} className={tab === t ? "active" : ""} onClick={() => setTab(t)}>
-                {{ ai: "Clips", clip: "Clip", look: "Color", text: "Text", export: "Export" }[t]}
+                {{ ai: "Clips", clip: "Clip", layers: "Layers", look: "Color", text: "Text", export: "Export" }[t]}
               </button>
             ))}
           </nav>
           <div className="panel-body">
             {tab === "ai" && <VideoAi client={client} snapshot={snapshot} onNotice={onNotice} />}
             {tab === "clip" && (selected ? <ClipPanel client={client} snapshot={snapshot} entry={selected} run={run} onSplit={split} onDelete={removeSelected} onPickSubject={startPick} picking={picking} onNotice={onNotice} /> : <p className="muted small">Select a clip on the timeline.</p>)}
+            {tab === "layers" && (
+              <LayersPanel
+                project={project}
+                playhead={playhead}
+                selClip={selClip}
+                onSelectClip={(id) => {
+                  setSelClip(id);
+                  setSelCaption(null);
+                }}
+                onSeek={seek}
+                run={run}
+                tool={tool}
+                setTool={setTool}
+              />
+            )}
             {tab === "look" && <LookPanel client={client} snapshot={snapshot} playhead={playhead} run={run} />}
             {tab === "text" && (
               <TextPanel
@@ -401,7 +459,7 @@ export function VideoEditor({ client, snapshot, onNotice }: Props) {
         onSelectClip={(id) => {
           setSelClip(id);
           setSelCaption(null);
-          if (id) setTab("clip");
+          if (id) setTab((t) => (t === "layers" ? t : "clip"));
         }}
         onSelectCaption={(id) => {
           setSelCaption(id);
@@ -569,16 +627,30 @@ function Timeline(props: {
                       style={{
                         left: g.start * zoom,
                         width: Math.max(6, g.dur * zoom),
-                        backgroundImage: media?.thumb_path && track.kind !== "audio" ? `url(${client.fileUrl(`/media/${media.id}/thumb`)})` : undefined,
+                        backgroundColor: c.source === "solid" ? c.color : undefined,
+                        backgroundImage: media?.thumb_path && track.kind !== "audio" && (c.source ?? "media") === "media" ? `url(${client.fileUrl(`/media/${media.id}/thumb`)})` : undefined,
                       }}
                       onPointerDown={(e) => onPointerDown(e, c, "move")}
                       onPointerMove={onPointerMove}
                       onPointerUp={() => onPointerUp(c)}
-                      title={`${media?.name ?? "?"} · ${clipDuration(c).toFixed(2)}s${c.speed !== 1 ? ` · ${c.speed}×` : ""}`}
+                      title={`${c.name || media?.name || "Layer"} · ${clipDuration(c).toFixed(2)}s${c.speed !== 1 ? ` · ${c.speed}×` : ""}`}
                     >
                       {c.transition && <span className="tl-trans" title={`${label(c.transition.kind)} ${c.transition.duration}s`} style={{ left: -6 }} />}
+                      {selClip === c.id &&
+                        keyTimes(c).map((kt) => (
+                          <span
+                            key={kt}
+                            className="tl-key"
+                            style={{ left: (kt - c.start) * zoom }}
+                            title={`Keyframe at ${fmt(kt)}`}
+                            onPointerDown={(e) => {
+                              e.stopPropagation();
+                              onSeek(kt);
+                            }}
+                          />
+                        ))}
                       <span className="tl-name">
-                        {media?.name}
+                        {c.name || media?.name || (c.source === "adjustment" ? "Adjustment layer" : "Solid")}
                         {c.speed !== 1 ? ` · ${c.speed}×` : ""}
                         {c.muted ? " · muted" : ""}
                       </span>

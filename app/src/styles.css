@@ -256,6 +256,35 @@ textarea { font: inherit; color: var(--text); background: var(--bg-2); border: 1
 .live-player canvas { grid-area: 1 / 1; max-width: 100%; max-height: 100%; width: auto; height: auto; aspect-ratio: auto; }
 .live-player canvas:first-child { background: #000; }
 .v-stage img.exact { z-index: 1; }
+.v-overlay { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 3; overflow: visible; pointer-events: none; touch-action: none; user-select: none; -webkit-user-select: none; }
+.v-overlay > * { pointer-events: auto; }
+.v-overlay.pen { cursor: crosshair; }
+.ov-catch { fill: transparent; }
+.ov-box { fill: transparent; stroke: #4da3ff; stroke-width: 1.5; cursor: move; }
+.ov-line { stroke: #4da3ff; stroke-width: 1.5; pointer-events: none; }
+.ov-handle { fill: #fff; stroke: #4da3ff; stroke-width: 1.5; cursor: nwse-resize; }
+.ov-rot { fill: #fff; stroke: #4da3ff; stroke-width: 1.5; cursor: grab; }
+.ov-anchor { cursor: crosshair; } .ov-anchor * { fill: transparent; stroke: #fff; stroke-width: 1.5; }
+.ov-mask { fill: none; stroke: #ffd24d; stroke-width: 1.5; stroke-dasharray: 5 4; pointer-events: none; } .ov-mask.off { opacity: .4; }
+.ov-point { fill: #ffd24d; stroke: #222; stroke-width: 1; cursor: pointer; } .ov-point.close { fill: #5f5; }
+.ov-pen { fill: none; stroke: #ffd24d; stroke-width: 1.5; pointer-events: none; } .ov-pen.ghost { stroke-dasharray: 3 3; opacity: .7; }
+.layer-list { list-style: none; margin: 6px 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+.layer { display: flex; align-items: center; gap: 4px; padding: 4px 6px; border-radius: 6px; background: rgba(255,255,255,.03); cursor: pointer; }
+.layer:hover { background: rgba(255,255,255,.07); } .layer.selected { background: rgba(77,163,255,.18); outline: 1px solid rgba(77,163,255,.5); }
+.layer.off .layer-text { opacity: .45; }
+.layer-text { flex: 1; min-width: 0; display: flex; flex-direction: column; } .layer-text > * { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.layer-name { font-size: 13px; } input.layer-name { padding: 1px 4px; }
+.layer .swatch { width: 14px; height: 14px; border-radius: 3px; border: 1px solid rgba(255,255,255,.3); flex: none; }
+.layer select.matte { width: auto; max-width: 92px; font-size: 11px; padding: 2px; }
+.layer .updown { display: flex; flex-direction: column; } .layer .updown .icon { font-size: 8px; padding: 0 4px; line-height: 1.2; }
+button.icon { padding: 2px 5px; min-width: 0; background: transparent; border: none; }
+.row.tools { gap: 4px; } .row.tools button { padding: 3px 8px; font-size: 12px; }
+.prop { display: flex; align-items: flex-end; gap: 2px; } .prop .slider { flex: 1; }
+.prop .stopwatch { opacity: .45; } .prop .stopwatch.on { opacity: 1; color: #4da3ff; }
+.prop .key { color: #777; } .prop .key.on { color: #ffd24d; } .prop.anim .val { color: #4da3ff; }
+.slider .val { cursor: text; font-variant-numeric: tabular-nums; } .slider .val-input { width: 80px; padding: 0 4px; font-size: 12px; }
+.mask { border-top: 1px solid rgba(255,255,255,.08); padding-top: 6px; margin-top: 6px; } .mask.off { opacity: .55; }
+.tl-key { position: absolute; top: 2px; width: 8px; height: 8px; margin-left: -4px; background: #ffd24d; transform: rotate(45deg); z-index: 2; cursor: pointer; border: 1px solid #222; }
 .live-note { font-size: 12px; color: var(--muted, #999); }
 .v-empty { position: absolute; inset: 0; display: grid; place-content: center; text-align: center; padding: 16px; border: 1px dashed var(--line-2); border-radius: var(--r-lg); }
 .v-empty p { margin: 2px 0; }
