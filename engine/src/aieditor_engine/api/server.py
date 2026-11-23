@@ -246,6 +246,14 @@ def create_app(token: str | None = None, automation: JobManager | None = None) -
     def media_proxy(media_id: str) -> FileResponse:
         return _derived_file(state.require(), media_id, "proxy_path", "video/mp4")
 
+    @app.get("/media/{media_id}/source", dependencies=secured)
+    def media_source(media_id: str) -> FileResponse:
+        """The original file (audio for the live preview; video when it has no proxy)."""
+        item = state.require().bus.project.media.get(media_id)
+        if item is None or not Path(item.path).is_file():
+            raise HTTPException(404, "not available")
+        return FileResponse(item.path)
+
     # --------------------------------------------------------------- photo
     @app.get("/ops", dependencies=secured)
     def ops() -> list[dict[str, Any]]:

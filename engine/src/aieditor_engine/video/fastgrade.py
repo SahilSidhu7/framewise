@@ -97,15 +97,20 @@ def _upsample(table: np.ndarray, n_out: int = 256) -> np.ndarray:
     return out
 
 
-def bake(flat: list[tuple[str, dict[str, Any]]]) -> np.ndarray:
-    """(256**3, 3) uint8 table indexed by r<<16 | g<<8 | b (sRGB in, sRGB out)."""
+def bake_lattice(flat: list[tuple[str, dict[str, Any]]]) -> np.ndarray:
+    """The grade on a LATTICE^3 grid of sRGB inputs: (r, g, b, 3) sRGB outputs in 0..1."""
     grid = np.linspace(0, 1, LATTICE, dtype=np.float32)
     r, g, b = np.meshgrid(grid, grid, grid, indexing="ij")
     lattice = np.stack([r, g, b], axis=-1).reshape(LATTICE, LATTICE * LATTICE, 3)
     ctx = make_context(0)
     ctx.extra["pointwise"] = True
     graded = apply_flat(srgb_to_linear(lattice), flat, ctx)
-    enc = np.clip(linear_to_srgb(np.clip(graded, 0, None)), 0, 1).reshape(LATTICE, LATTICE, LATTICE, 3)
+    return np.clip(linear_to_srgb(np.clip(graded, 0, None)), 0, 1).reshape(LATTICE, LATTICE, LATTICE, 3)
+
+
+def bake(flat: list[tuple[str, dict[str, Any]]], lattice: np.ndarray | None = None) -> np.ndarray:
+    """(256**3, 3) uint8 table indexed by r<<16 | g<<8 | b (sRGB in, sRGB out)."""
+    enc = lattice if lattice is not None else bake_lattice(flat)
     full = _upsample(enc)
     return np.clip(full * 255 + 0.5, 0, 255).astype(np.uint8).reshape(-1, 3)
 
@@ -118,7 +123,8 @@ class GradePlan:
             split += 1
         self.baked = flat[:split]
         self.rest = flat[split:]
-        self.lut = bake(self.baked) if self.baked else None
+        self.lattice = bake_lattice(self.baked) if self.baked else None  # also sent to the app's live preview
+        self.lut = bake(self.baked, self.lattice) if self.baked else None
 
     def finish(self, canvas: np.ndarray, seed: int) -> np.ndarray:
         """Linear canvas -> graded 8-bit sRGB frame."""

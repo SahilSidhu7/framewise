@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal
 
 import cv2
+import numpy as np
 from fastapi import FastAPI, HTTPException, Query, Response
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
@@ -20,7 +21,9 @@ from ..core.commands import CommandError
 from ..core.project import EditOp, MediaKind, Project
 from ..dsl import DslError, compile_program
 from ..video.captions import captions_from_transcripts
+from ..imaging.ops import OPS
 from ..video.compose import RenderSource, output_size, render_frame
+from ..video.fastgrade import PLANS
 from ..video.export import ExportSpec, export_video
 from ..video.text import STYLE_INFO
 from ..video.vdsl import VideoDslError, apply_video_program, timeline_to_dsl
@@ -149,6 +152,48 @@ def register(app: FastAPI, require, secured: list) -> None:  # noqa: ANN001 - Fa
             data = _jpeg(frame)
             FRAMES.put(key, data)
         return Response(data, media_type="image/jpeg", headers={"Cache-Control": "private, max-age=3600"})
+
+    # ---------------------------------------------------- live preview (app WebGL2)
+    @app.get("/timeline/live", dependencies=secured)
+    def timeline_live() -> dict[str, Any]:
+        """What the app's live preview needs about the grade, and what it cannot show
+        (those parts appear in the exact frame when playback stops)."""
+        session: Session = require()
+        with session.bus.lock:
+            project = session.bus.project.model_copy(deep=True)
+        grade = [o.model_dump(mode="json") for o in project.grade if not OPS[o.op].geometry and OPS[o.op].category != "subject"]
+        plan = PLANS.get(grade) if grade else None
+        post, missing = [], []
+        for name, params in (plan.rest if plan else []):
+            if name in ("vignette", "grain"):
+                post.append({"op": name, **OPS[name].params_model.model_validate(params).model_dump()})
+            else:
+                missing.append(name)
+        for track in project.tracks:
+            for clip in track.clips:
+                if clip.source == "adjustment":
+                    missing.append("adjustment layer")
+                elif any(not OPS[o.op].geometry and OPS[o.op].category != "subject" for o in clip.ops):
+                    missing.append("clip effects")
+                if clip.transition and clip.transition.kind == "blur":
+                    missing.append("blur transition")
+                if any(project.edits.get(clip.media_id, [])) and project.media.get(clip.media_id) and project.media[clip.media_id].kind == MediaKind.VIDEO:
+                    missing.append("clip effects")
+        return {"lattice": plan is not None and plan.lattice is not None, "lattice_size": 65, "post": post,
+                "missing": sorted(set(missing)), "revision": session.bus.revision}
+
+    @app.get("/timeline/grade_lattice", dependencies=secured)
+    def timeline_grade_lattice() -> Response:
+        """The baked grade as a 65^3 RGB8 table (blue fastest, then green, then red)."""
+        session: Session = require()
+        with session.bus.lock:
+            grade = [o.model_dump(mode="json") for o in session.bus.project.grade
+                     if not OPS[o.op].geometry and OPS[o.op].category != "subject"]
+        plan = PLANS.get(grade) if grade else None
+        if plan is None or plan.lattice is None:
+            raise HTTPException(404, "no colour grade")
+        data = np.clip(plan.lattice * 255 + 0.5, 0, 255).astype(np.uint8).tobytes()
+        return Response(data, media_type="application/octet-stream", headers={"Cache-Control": "no-store"})
 
     @app.get("/timeline/dsl", dependencies=secured)
     def timeline_dsl() -> dict[str, Any]:

@@ -16,6 +16,7 @@ uniform sampler2D noise;   // (h + 32) x (w + 32) RGB32F, top row first
 uniform ivec2 offset;      // dither offset for this frame (x, y)
 uniform int use_lut;
 uniform sampler3D lut;     // 256^3 RGB8: x = blue, y = green, z = red
+uniform int lut_size;      // 0 or 256: exact table (engine); e.g. 65: the lattice, trilinear (app preview)
 uniform int height;
 uniform int n_ops;         // spatial grade effects after the LUT (0..4)
 uniform ivec4 op_kind;
@@ -48,7 +49,13 @@ void main() {
     vec3 n = texelFetch(noise, top + offset, 0).rgb;
     vec3 u = encode(c, n);
     if (use_lut == 1) {
-        u = floor(texelFetch(lut, ivec3(int(u.b), int(u.g), int(u.r)), 0).rgb * 255.0 + 0.5);
+        if (lut_size > 0 && lut_size < 256) {
+            float ls = float(lut_size);
+            vec3 q = (u.bgr / 255.0 * (ls - 1.0) + 0.5) / ls;  // texture x = blue
+            u = floor(texture(lut, q).rgb * 255.0 + 0.5);
+        } else {
+            u = floor(texelFetch(lut, ivec3(int(u.b), int(u.g), int(u.r)), 0).rgb * 255.0 + 0.5);
+        }
     }
     if (n_ops > 0) {
         vec3 x = vec3(texelFetch(lin8, ivec2(int(u.r), 0), 0).r, texelFetch(lin8, ivec2(int(u.g), 0), 0).r,

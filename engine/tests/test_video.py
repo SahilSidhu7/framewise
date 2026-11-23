@@ -527,3 +527,25 @@ def test_export_parallelism_fits_memory(monkeypatch):
     assert peak_gb <= 8.0  # half of what is free
     monkeypatch.setattr(segment, "_free_gb", lambda: 1.0)
     assert _parallelism(3840, 2160, 30, 8) == (1, 1)  # low memory: still renders, one at a time
+
+
+def test_live_preview_routes(clips, tmp_path):
+    app = create_app(TOKEN)
+    h = {"X-Engine-Token": TOKEN}
+    with TestClient(app) as c:
+        c.post("/projects", json={"path": str(tmp_path / "live"), "name": "L", "kind": "video"}, headers=h)
+        c.post("/media/import", json={"paths": [str(clips["red"]), str(clips["song"])]}, headers=h)
+        session: Session = app.state.engine.session
+        session.wait_for_jobs(60)
+        assert c.get("/timeline/grade_lattice", headers=h).status_code == 404  # no grade yet
+        prog = "clip 1 0-2\nmusic 2\nlook teal_orange_cinematic\ngrain 0.2"
+        assert c.post("/ai/video/apply", json={"program": prog}, headers=h).status_code == 200
+        info = c.get("/timeline/live", headers=h).json()
+        assert info["lattice"] and info["lattice_size"] == 65
+        assert [p["op"] for p in info["post"]] == ["vignette", "grain"] and info["missing"] == []
+        lat = c.get("/timeline/grade_lattice", headers=h)
+        assert lat.status_code == 200 and len(lat.content) == 65**3 * 3
+        mid = next(iter(session.bus.project.media))
+        src = c.get(f"/media/{mid}/source", params={"token": TOKEN})
+        assert src.status_code == 200 and len(src.content) == clips["red"].stat().st_size
+        assert c.get("/media/nope/source", headers=h).status_code == 404

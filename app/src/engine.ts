@@ -45,9 +45,61 @@ export interface SubjectInfo {
 export type TransitionKind = "crossfade" | "fade_black" | "fade_white" | "wipe_left" | "wipe_right" | "slide_left" | "slide_up" | "zoom" | "blur";
 export type Motion = "none" | "zoom_in" | "zoom_out" | "pan_left" | "pan_right";
 
+export type BlendMode =
+  | "normal" | "darken" | "multiply" | "color_burn" | "linear_burn" | "darker_color"
+  | "lighten" | "screen" | "color_dodge" | "add" | "lighter_color"
+  | "overlay" | "soft_light" | "hard_light" | "vivid_light" | "linear_light" | "pin_light" | "hard_mix"
+  | "difference" | "exclusion" | "subtract" | "divide" | "hue" | "saturation" | "color" | "luminosity";
+
+/** Same order as core/project.py BLEND_MODES (the shaders use the index). */
+export const BLEND_MODES: BlendMode[] = [
+  "normal", "darken", "multiply", "color_burn", "linear_burn", "darker_color",
+  "lighten", "screen", "color_dodge", "add", "lighter_color",
+  "overlay", "soft_light", "hard_light", "vivid_light", "linear_light", "pin_light", "hard_mix",
+  "difference", "exclusion", "subtract", "divide", "hue", "saturation", "color", "luminosity",
+];
+
+export interface Keyframe {
+  t: number;
+  value: number;
+  ease: "linear" | "ease" | "hold" | "bezier";
+  bezier?: [number, number, number, number] | null;
+}
+
+export interface MaskPoint {
+  x: number;
+  y: number;
+  in_x: number;
+  in_y: number;
+  out_x: number;
+  out_y: number;
+}
+
+export interface Mask {
+  id: string;
+  name: string;
+  points: MaskPoint[];
+  mode: "add" | "subtract" | "intersect" | "difference";
+  inverted: boolean;
+  opacity: number;
+  feather: number;
+  expansion: number;
+  enabled: boolean;
+}
+
 export interface Clip {
   id: string;
   media_id: string;
+  source?: "media" | "solid" | "adjustment";
+  color?: string;
+  name?: string;
+  transform?: { x: number; y: number; scale: number; rotation: number; anchor_x?: number; anchor_y?: number };
+  opacity?: number;
+  blend?: BlendMode;
+  crop?: { left: number; top: number; right: number; bottom: number };
+  keyframes?: Record<string, Keyframe[]>;
+  masks?: Mask[];
+  link_id?: string | null;
   start: number;
   in_point: number;
   out_point: number;
@@ -124,11 +176,19 @@ export interface VideoVariation {
   warnings: string[];
 }
 
+export type LivePostOp =
+  | { op: "vignette"; amount: number; midpoint: number; feather: number }
+  | { op: "grain"; amount: number; size: number; seed: number };
+
 export interface Track {
   id: string;
   kind: "video" | "audio" | "overlay";
   name: string;
   clips: Clip[];
+  muted?: boolean;
+  hidden?: boolean;
+  locked?: boolean;
+  matte?: "alpha" | "alpha_inverted" | "luma" | "luma_inverted" | null;
 }
 
 export interface EditOp {
@@ -151,6 +211,9 @@ export interface Project {
     normalize_audio: boolean;
     fade_in: number;
     fade_out: number;
+    progress_bar?: "off" | "top" | "bottom";
+    end_card?: string | null;
+    end_card_seconds?: number;
   };
   media: Record<string, MediaItem>;
   tracks: Track[];
@@ -379,6 +442,19 @@ export class EngineClient {
     if (opts.program) q.set("program", opts.program);
     if (opts.grade !== undefined) q.set("grade", opts.grade);
     return `${this.base}/timeline/frame?${q}`;
+  }
+  /** What the live (WebGL2) preview needs about the grade, and what it leaves out. */
+  liveInfo = () =>
+    this.request<{ lattice: boolean; lattice_size: number; post: LivePostOp[]; missing: string[]; revision: number }>("GET", "/timeline/live");
+  async gradeLattice(): Promise<Uint8Array> {
+    const res = await fetch(`${this.base}/timeline/grade_lattice`, { headers: { "X-Engine-Token": this.token } });
+    if (!res.ok) throw new EngineError(res.status, res.statusText);
+    return new Uint8Array(await res.arrayBuffer());
+  }
+  /** A media file the browser can play: the proxy when there is one, else the original. */
+  mediaPlayUrl(item: MediaItem): string {
+    const path = item.kind === "video" && item.proxy_status === "ready" ? `/media/${item.id}/proxy` : `/media/${item.id}/source`;
+    return this.fileUrl(path);
   }
   previewRender = (maxSide = 640) =>
     this.request<{ job: string | null; revision: number; url: string | null }>("POST", "/timeline/preview", { max_side: maxSide });

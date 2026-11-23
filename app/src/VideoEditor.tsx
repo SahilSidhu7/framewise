@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+
+import { LivePlayer, liveSupported } from "./live/LivePlayer";
 import { clipDuration, EngineClient, isTauri, projectDuration, type Caption, type Clip, type EngineEvent, type LookInfo, type Snapshot, type Track, type VideoVariation, type AiOptions, type OutputOptions } from "./engine";
 
 import { SubjectModelNote, pointOnImage } from "./Subject";
@@ -49,6 +51,11 @@ export function VideoEditor({ client, snapshot, onNotice }: Props) {
   const [captionJob, setCaptionJob] = useState<string | null>(null);
   const [frameLoading, setFrameLoading] = useState(false);
   const [picking, setPicking] = useState(false);
+  const [liveFailed, setLiveFailed] = useState(false);
+  const [liveMissing, setLiveMissing] = useState<string[]>([]);
+  const [jump, setJump] = useState(0);
+  // live preview: the timeline plays at once in WebGL2 (engine shaders); else a rendered preview video
+  const live = !liveFailed && liveSupported();
   const pickImg = useRef<HTMLImageElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const wantPlay = useRef(false);
@@ -105,7 +112,7 @@ export function VideoEditor({ client, snapshot, onNotice }: Props) {
 
   // ---- playable preview: re-render shortly after every change
   useEffect(() => {
-    if (duration <= 0) return;
+    if (duration <= 0 || live) return;
     const timer = window.setTimeout(() => {
       client.previewRender().then(
         (r) => {
@@ -116,19 +123,24 @@ export function VideoEditor({ client, snapshot, onNotice }: Props) {
       );
     }, 900);
     return () => window.clearTimeout(timer);
-  }, [client, revision, duration]);
+  }, [client, revision, duration, live]);
 
   const fresh = preview !== null && preview.revision === revision;
 
   useEffect(() => {
-    if (!fresh && playing) {
+    if (!live && !fresh && playing) {
       videoRef.current?.pause();
       setPlaying(false);
       wantPlay.current = true; // resume once the new preview is ready
     }
-  }, [fresh, playing]);
+  }, [fresh, playing, live]);
 
   const play = useCallback(() => {
+    if (live) {
+      if (playhead >= duration - 0.05) setPlayhead(0);
+      setPlaying(true);
+      return;
+    }
     const v = videoRef.current;
     if (!fresh || !v) {
       wantPlay.current = true;
@@ -137,7 +149,7 @@ export function VideoEditor({ client, snapshot, onNotice }: Props) {
     if (playhead >= duration - 0.05) setPlayhead(0);
     v.currentTime = playhead >= duration - 0.05 ? 0 : playhead;
     v.play().then(() => setPlaying(true), () => undefined);
-  }, [fresh, playhead, duration]);
+  }, [fresh, playhead, duration, live]);
 
   const pause = useCallback(() => {
     videoRef.current?.pause();
@@ -146,16 +158,16 @@ export function VideoEditor({ client, snapshot, onNotice }: Props) {
   }, []);
 
   useEffect(() => {
-    if (fresh && wantPlay.current) {
+    if (!live && fresh && wantPlay.current) {
       wantPlay.current = false;
       const t = window.setTimeout(play, 50);
       return () => window.clearTimeout(t);
     }
-  }, [fresh, play]);
+  }, [fresh, play, live]);
 
-  // follow the video while playing
+  // follow the video while playing (the live player reports time itself)
   useEffect(() => {
-    if (!playing) return;
+    if (!playing || live) return;
     let raf = 0;
     const tick = () => {
       const v = videoRef.current;
@@ -164,15 +176,16 @@ export function VideoEditor({ client, snapshot, onNotice }: Props) {
     };
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
-  }, [playing]);
+  }, [playing, live]);
 
   const seek = useCallback(
     (t: number) => {
       const c = Math.max(0, Math.min(duration, Math.round(t * fps) / fps));
       setPlayhead(c);
-      if (playing && videoRef.current) videoRef.current.currentTime = c;
+      if (playing && live) setJump((n) => n + 1);
+      else if (playing && videoRef.current) videoRef.current.currentTime = c;
     },
-    [duration, fps, playing],
+    [duration, fps, playing, live],
   );
 
   // ---- editing actions
@@ -215,7 +228,10 @@ export function VideoEditor({ client, snapshot, onNotice }: Props) {
     return () => window.removeEventListener("keydown", onKey);
   }, [playing, play, pause, split, removeSelected, seek, playhead, fps, duration]);
 
-  const frameSrc = duration > 0 ? client.frameUrl(Math.min(playhead, Math.max(0, duration - 1 / fps)), { max: 1280, rev: revision }) : null;
+  // the exact engine frame follows the playhead only while stopped (the live player shows playback)
+  const exactAt = useRef(0);
+  if (!playing || !live) exactAt.current = playhead;
+  const frameSrc = duration > 0 ? client.frameUrl(Math.min(exactAt.current, Math.max(0, duration - 1 / fps)), { max: 1280, rev: revision }) : null;
   useEffect(() => setFrameLoading(true), [frameSrc]);
 
   const empty = project.tracks.every((t) => t.clips.length === 0);
@@ -273,16 +289,37 @@ export function VideoEditor({ client, snapshot, onNotice }: Props) {
                   />
                 )}
                 {picking && <div className="pick-hint">Click the subject · Esc to cancel</div>}
+                {live && (
+                  <LivePlayer
+                    client={client}
+                    project={project}
+                    revision={revision}
+                    playhead={playhead}
+                    playing={playing}
+                    jump={jump}
+                    onTime={setPlayhead}
+                    onEnded={() => {
+                      setPlaying(false);
+                      setPlayhead(duration);
+                    }}
+                    onInfo={setLiveMissing}
+                    onError={(m) => {
+                      setLiveFailed(true);
+                      setPlaying(false);
+                      onNotice(`Live preview is off: ${m}`);
+                    }}
+                  />
+                )}
                 {frameSrc && !picking && (
                   <img
-                    className={`${playing ? "hidden" : ""} ${frameLoading ? "loading" : ""}`}
+                    className={live ? `exact ${playing || frameLoading ? "hidden" : ""}` : `${playing ? "hidden" : ""} ${frameLoading ? "loading" : ""}`}
                     src={frameSrc}
                     alt=""
                     onLoad={() => setFrameLoading(false)}
                     onError={() => setFrameLoading(false)}
                   />
                 )}
-                {preview && (
+                {!live && preview && (
                   <video
                     ref={videoRef}
                     className={playing ? "" : "hidden"}
@@ -307,10 +344,15 @@ export function VideoEditor({ client, snapshot, onNotice }: Props) {
               {fmt(playhead)} / {fmt(duration)}
             </span>
             <div className="spacer" />
-            {previewProgress !== null && !fresh && (
+            {live && playing && liveMissing.length > 0 && (
+              <span className="live-note" title="These show in the exact frame when playback stops, and in the export">
+                Live preview leaves out: {liveMissing.join(", ")}
+              </span>
+            )}
+            {!live && previewProgress !== null && !fresh && (
               <span className="muted small">Preparing playback {Math.round(previewProgress * 100)}%</span>
             )}
-            {fresh && <span className="ok small">Ready to play</span>}
+            {!live && fresh && <span className="ok small">Ready to play</span>}
           </div>
         </section>
 
