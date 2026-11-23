@@ -4,6 +4,7 @@ import { LivePlayer, liveSupported } from "./live/LivePlayer";
 import { LayersPanel, type Tool } from "./layers/LayersPanel";
 import { ViewerOverlay } from "./layers/ViewerOverlay";
 import { activeOn, applyValues, commitValues, keyTimes, replaceClip, type Values } from "./layers/edit";
+import { useVectorBounds } from "./layers/bounds";
 import { clipDuration, EngineClient, isTauri, projectDuration, type Caption, type Clip, type EngineEvent, type LookInfo, type Snapshot, type Track, type VideoVariation, type AiOptions, type OutputOptions } from "./engine";
 
 import { SubjectModelNote, pointOnImage } from "./Subject";
@@ -248,6 +249,7 @@ export function VideoEditor({ client, snapshot, onNotice }: Props) {
   useEffect(() => setFrameLoading(true), [frameSrc]);
 
   const empty = project.tracks.every((t) => t.clips.length === 0);
+  const overlayBounds = useVectorBounds(client, selected?.clip, project.settings.width, project.settings.height);
   // handles show on the selected layer when it is under the playhead and playback is stopped
   const overlayClip = (() => {
     if (playing || picking || !selected || selected.track.kind === "audio" || selected.track.hidden) return null;
@@ -360,6 +362,7 @@ export function VideoEditor({ client, snapshot, onNotice }: Props) {
                       setDraft(null);
                     }}
                     onPenDone={() => setTool("move")}
+                    bounds={overlayBounds}
                   />
                 )}
                 {!live && preview && (
@@ -650,7 +653,7 @@ function Timeline(props: {
                           />
                         ))}
                       <span className="tl-name">
-                        {c.name || media?.name || (c.source === "adjustment" ? "Adjustment layer" : "Solid")}
+                        {c.name || media?.name || (c.source === "text" ? c.text?.text.split("\n")[0] : c.source === "shape" ? "Shape" : c.source === "adjustment" ? "Adjustment layer" : "Solid")}
                         {c.speed !== 1 ? ` · ${c.speed}×` : ""}
                         {c.muted ? " · muted" : ""}
                       </span>

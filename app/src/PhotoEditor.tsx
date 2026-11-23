@@ -15,6 +15,7 @@ import {
 import { LayersPanel, type Tool } from "./layers/LayersPanel";
 import { ViewerOverlay } from "./layers/ViewerOverlay";
 import { applyValues, commitValues, replaceClip, type RunFn as LayerRun, type Values } from "./layers/edit";
+import { useVectorBounds } from "./layers/bounds";
 import { PhotoSubjectControls, SubjectModelNote, SubjectOutline, pointOnImage, setPhotoSubject } from "./Subject";
 
 type Tab = "ai" | "looks" | "adjust" | "crop" | "layers" | "edits";
@@ -199,6 +200,7 @@ export function PhotoEditor({ client, snapshot, item, onNotice }: Props) {
   }, [snapshot.project, item, aspect]);
   const selEntry = selLayer ? doc.tracks.flatMap((track) => track.clips.map((clip) => ({ track, clip }))).find((e) => e.clip.id === selLayer) : undefined;
   const shownDoc = layerDraft ? replaceClip(doc, layerDraft) : doc;
+  const overlayBounds = useVectorBounds(client, selEntry?.clip, doc.settings.width, doc.settings.height);
   const overlayClip = tab === "layers" && !compare && selEntry && !selEntry.track.hidden ? shownDoc.tracks.flatMap((t) => t.clips).find((c) => c.id === selLayer) : undefined;
 
   useEffect(() => {
@@ -334,6 +336,7 @@ export function PhotoEditor({ client, snapshot, item, onNotice }: Props) {
                   await runLayer("clip.set_masks", { clip_id: selEntry.clip.id, masks });
                 }}
                 onPenDone={() => setTool("move")}
+                bounds={overlayBounds}
               />
             </div>
           )}

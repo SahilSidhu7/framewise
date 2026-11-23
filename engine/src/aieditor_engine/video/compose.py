@@ -32,6 +32,7 @@ from .decode import READERS, u8_to_linear
 from .fastgrade import PLANS, encode_u8
 from .layers import composite, hex_to_linear, masks_coverage, matte_value, multiply_alpha
 from .text import draw_text
+from .vector import vector_raster
 
 
 @dataclass
@@ -166,6 +167,14 @@ def _shape(clip: Clip, t: float, sw: int, sh: int, w: int, h: int, cover: np.nda
 
 
 def clip_frame(project: Project, clip: Clip, t: float, w: int, h: int, src: RenderSource, seed: int) -> tuple[np.ndarray, Alpha]:
+    if clip.vector:
+        # text / shape: drawn in layer space (the canvas), with its own alpha, then placed like a solid
+        rgb, a_src = vector_raster(clip, w, h)
+        placed, cover = _place(np.dstack([rgb, a_src]), clip, t, w, h)
+        img, shape_a = placed[..., :3], placed[..., 3]
+        cover = _shape(clip, t, w, h, w, h, shape_a if cover is None else cover * shape_a)
+        alpha = cover * _layer_alpha(clip, t)
+        return np.ascontiguousarray(img * alpha[..., None]), alpha
     if clip.source == "solid":
         img = np.empty((h, w, 3), np.float32)
         img[:] = hex_to_linear(clip.color)

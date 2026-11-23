@@ -20,9 +20,12 @@ from .project import (
     EditOp,
     Keyframe,
     LayerSource,
+    FontFamily,
     Marker,
     Mask,
     MediaKind,
+    ShapeStyle,
+    TextStyle,
     MatteMode,
     Motion,
     Project,
@@ -429,7 +432,9 @@ def clip_set_masks(p: Project, a: MasksParams) -> None:
 
 
 class LayerAddParams(BaseModel):
-    source: LayerSource = Field(description="solid (a colour), adjustment (effects on everything below) or media (photo documents: an image)")
+    source: LayerSource = Field(description="solid (a colour), adjustment (effects on everything below), text, shape, or media (photo documents: an image)")
+    text: str = Field("Text", min_length=1, max_length=2000, description="source=text: the words")
+    shape: Literal["rectangle", "ellipse"] = Field("rectangle", description="source=shape: the kind")
     media_id: str = Field("", description="source=media: the image to place")
     doc: str | None = Field(None, description="Photo media_id: add the layer to that photo's layer stack instead of the timeline")
     start: float = Field(0.0, ge=0)
@@ -458,19 +463,71 @@ def layer_add(p: Project, a: LayerAddParams) -> dict:
         if any(c.start < a.start + a.duration and a.start < c.end for c in track.clips):
             raise CommandError("overlaps another clip on that track")
     else:
-        default = {"adjustment": "Adjustment", "solid": "Solid", "media": p.media[a.media_id].name if a.source == "media" else ""}
+        default = {"adjustment": "Adjustment", "solid": "Solid", "media": p.media[a.media_id].name if a.source == "media" else "",
+                   "text": a.text.splitlines()[0][:40], "shape": "Shape"}
         track = Track(id=new_id("trk"), kind="overlay", name=(a.name or default[a.source])[:40])
         (p.layers.setdefault(a.doc, []) if a.doc is not None else p.tracks).append(track)
     if a.source == "media":
         # a placed image starts fitted inside the photo at half size
         clip = Clip(id=new_id("clp"), media_id=a.media_id, start=a.start, in_point=0.0, out_point=a.duration, fit="fit", name=a.name)
         clip.transform.scale = 0.5
+    elif a.source == "text":
+        clip = Clip(id=new_id("clp"), source="text", start=a.start, in_point=0.0, out_point=a.duration, name=a.name,
+                    text=TextStyle(text=a.text, color=a.color if a.color != "#000000" else "#ffffff"))
+    elif a.source == "shape":
+        clip = Clip(id=new_id("clp"), source="shape", start=a.start, in_point=0.0, out_point=a.duration, name=a.name,
+                    shape=ShapeStyle(kind=a.shape, fill=a.color if a.color != "#000000" else "#ffffff"))
     else:
         clip = Clip(id=new_id("clp"), source=a.source, start=a.start, in_point=0.0, out_point=a.duration,
                     color=a.color, name=a.name or ("Adjustment layer" if a.source == "adjustment" else "Solid"))
     track.clips.append(clip)
     track.clips.sort(key=lambda c: c.start)
     return {"clip_id": clip.id, "track_id": track.id}
+
+
+class TextSetParams(BaseModel):
+    clip_id: str
+    text: str | None = Field(None, min_length=1, max_length=2000)
+    font: FontFamily | None = None
+    weight: int | None = Field(None, ge=100, le=900)
+    size: float | None = Field(None, gt=0, le=1, description="Fraction of the canvas short side")
+    color: str | None = Field(None, pattern=r"^#[0-9a-fA-F]{6}$")
+    align: Literal["left", "center", "right"] | None = None
+    line_height: float | None = Field(None, ge=0.5, le=4)
+    stroke_color: str | None = Field(None, pattern=r"^#[0-9a-fA-F]{6}$")
+    stroke_width: float | None = Field(None, ge=0, le=0.3, description="Fraction of the font size")
+
+
+@command("clip.set_text", TextSetParams, "Change a text layer: words, font, weight, size, colour, alignment, outline.", "timeline")
+def clip_set_text(p: Project, a: TextSetParams) -> None:
+    _, clip = p.find_clip(a.clip_id)
+    if clip.text is None:
+        raise CommandError("not a text layer")
+    clip.text = clip.text.model_copy(update=a.model_dump(exclude={"clip_id"}, exclude_none=True))
+
+
+class ShapeSetParams(BaseModel):
+    clip_id: str
+    kind: Literal["rectangle", "ellipse"] | None = None
+    width: float | None = Field(None, gt=0, le=4, description="Fraction of the canvas width")
+    height: float | None = Field(None, gt=0, le=4, description="Fraction of the canvas height")
+    radius: float | None = Field(None, ge=0, le=1)
+    fill: str | None = Field(None, pattern=r"^(#[0-9a-fA-F]{6}|none)$", description="A colour, or none for no fill")
+    stroke_color: str | None = Field(None, pattern=r"^#[0-9a-fA-F]{6}$")
+    stroke_width: float | None = Field(None, ge=0, le=0.5)
+
+
+@command("clip.set_shape", ShapeSetParams, "Change a shape layer: kind, size, corner radius, fill, outline.", "timeline")
+def clip_set_shape(p: Project, a: ShapeSetParams) -> None:
+    _, clip = p.find_clip(a.clip_id)
+    if clip.shape is None:
+        raise CommandError("not a shape layer")
+    update = a.model_dump(exclude={"clip_id"}, exclude_none=True)
+    if update.get("fill") == "none":
+        update["fill"] = None
+    clip.shape = clip.shape.model_copy(update=update)
+    if clip.shape.fill is None and clip.shape.stroke_width == 0:
+        raise CommandError("a shape needs a fill or an outline")
 
 
 class TrackSetParams(BaseModel):

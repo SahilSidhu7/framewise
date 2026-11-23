@@ -106,7 +106,34 @@ Easing = Literal["linear", "ease", "hold", "bezier"]
 KEYABLE = ("x", "y", "scale", "rotation", "opacity", "volume", "anchor_x", "anchor_y")
 MatteMode = Literal["alpha", "alpha_inverted", "luma", "luma_inverted"]
 MaskMode = Literal["add", "subtract", "intersect", "difference"]
-LayerSource = Literal["media", "solid", "adjustment"]
+LayerSource = Literal["media", "solid", "adjustment", "text", "shape"]
+FontFamily = Literal["sans", "display", "serif"]
+
+
+class TextStyle(BaseModel):
+    """A text layer: lines of text centred on the canvas (move it with the transform)."""
+
+    text: str = Field("Text", min_length=1, max_length=2000)
+    font: FontFamily = "sans"
+    weight: int = Field(700, ge=100, le=900)
+    size: float = Field(0.08, gt=0, le=1, description="Font size, fraction of the canvas short side")
+    color: str = Field("#ffffff", pattern=r"^#[0-9a-fA-F]{6}$")
+    align: Literal["left", "center", "right"] = "center"
+    line_height: float = Field(1.2, ge=0.5, le=4)
+    stroke_color: str = Field("#000000", pattern=r"^#[0-9a-fA-F]{6}$")
+    stroke_width: float = Field(0.0, ge=0, le=0.3, description="Outline, fraction of the font size")
+
+
+class ShapeStyle(BaseModel):
+    """A shape layer: a rectangle (rounded corners) or ellipse centred on the canvas."""
+
+    kind: Literal["rectangle", "ellipse"] = "rectangle"
+    width: float = Field(0.4, gt=0, le=4, description="Fraction of the canvas width")
+    height: float = Field(0.3, gt=0, le=4, description="Fraction of the canvas height")
+    radius: float = Field(0.0, ge=0, le=1, description="Rectangle corner radius, fraction of the canvas short side")
+    fill: str | None = Field("#ffffff", pattern=r"^#[0-9a-fA-F]{6}$", description="None = no fill")
+    stroke_color: str = Field("#000000", pattern=r"^#[0-9a-fA-F]{6}$")
+    stroke_width: float = Field(0.0, ge=0, le=0.5, description="Outline inside the edge, fraction of the canvas short side")
 
 
 class Transform(BaseModel):
@@ -257,10 +284,17 @@ class Clip(BaseModel):
     # schema v3
     masks: list[Mask] = Field(default_factory=list, description="Combined top to bottom; none = the whole layer shows")
     name: str = Field("", max_length=80)
+    text: TextStyle | None = Field(None, description="Text layers")
+    shape: ShapeStyle | None = Field(None, description="Shape layers")
+
+    @property
+    def vector(self) -> bool:
+        """A text or shape layer (drawn by the engine, with its own transparency)."""
+        return self.source in ("text", "shape")
 
     @property
     def generated(self) -> bool:
-        """A solid or adjustment layer (no media behind it)."""
+        """A solid, adjustment, text or shape layer (no media behind it)."""
         return self.source != "media"
 
     def value(self, name: str, t: float) -> float:

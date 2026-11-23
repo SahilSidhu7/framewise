@@ -101,8 +101,23 @@ export function LivePlayer({ client, project, revision, playhead, playing, jump 
   useEffect(() => {
     const map = els.current;
     const want = new Set<string>();
+    const [ow, oh] = outputSize(project, maxSide);
     for (const track of project.tracks) {
       for (const clip of track.clips) {
+        if (clip.source === "text" || clip.source === "shape") {
+          // drawn by the engine in layer space at the preview size; refetched when its style changes
+          const style = JSON.stringify(clip.source === "text" ? clip.text : clip.shape);
+          const url = `${client.fileUrl(`/layers/${clip.id}/raster`)}&w=${ow}&h=${oh}&v=${hashString(style)}`;
+          const key = `${clip.id}|${url}`;
+          want.add(key);
+          if (map.has(key)) continue;
+          const el = new Image();
+          el.onload = () => redraw();
+          el.crossOrigin = "anonymous";
+          el.src = url;
+          map.set(key, el);
+          continue;
+        }
         const item = project.media[clip.media_id];
         if ((clip.source ?? "media") !== "media" || !item) continue;
         const url = item.kind === "image" ? client.renderUrl(item.id, { max: 2048, rev: revision }) : client.mediaPlayUrl(item);
@@ -135,7 +150,7 @@ export function LivePlayer({ client, project, revision, playhead, playing, jump 
     }
     redraw();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [client, project, revision]);
+  }, [client, project, revision, maxSide]);
 
   const elFor = (clip: Clip): [string, MediaEl] | null => {
     for (const [key, el] of els.current) if (key.startsWith(clip.id + "|")) return [key, el];
@@ -218,6 +233,11 @@ export function LivePlayer({ client, project, revision, playhead, playing, jump 
     const found = elFor(clip);
     if (!found) return null;
     const [key, el] = found;
+    if (clip.source === "text" || clip.source === "shape") {
+      // layer space is the canvas (like a solid): the raster is the preview size
+      if (!(el instanceof HTMLImageElement) || !el.complete || el.naturalWidth !== w || el.naturalHeight !== h) return null;
+      return { kind: "source", el, key, fresh: false, alpha: true, ...geometry(clip, t, w, h, w, h) };
+    }
     if (el instanceof HTMLImageElement) {
       if (!el.complete || !el.naturalWidth) return null;
       return { kind: "source", el, key, fresh: false, ...geometry(clip, t, el.naturalWidth, el.naturalHeight, w, h) };
@@ -385,6 +405,12 @@ export function LivePlayer({ client, project, revision, playhead, playing, jump 
       <canvas ref={overlayRef} className="live-overlay" />
     </div>
   );
+}
+
+function hashString(s: string): string {
+  let h = 0;
+  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0;
+  return (h >>> 0).toString(36);
 }
 
 function release(el: MediaEl) {

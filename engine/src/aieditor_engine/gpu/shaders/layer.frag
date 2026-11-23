@@ -7,6 +7,7 @@
 
 uniform sampler2D src;      // CPU upload, top row first; sRGB textures decode to linear
 uniform int solid;          // 1: a flat colour instead of `src`
+uniform int src_alpha;      // 1: `src` carries its own (straight) alpha: text and shape layers
 uniform vec3 color;         // linear
 uniform mat3 inv;           // canvas pixel -> source pixel
 uniform vec2 src_size;      // source pixels
@@ -23,7 +24,8 @@ out vec4 frag;
 void main() {
     ivec2 p = top_pixel(height);
     vec2 s = (inv * vec3(vec2(p), 1.0)).xy;
-    vec3 c = solid == 1 ? color : texture(src, (s + 0.5) / src_size).rgb;
+    vec4 tx = texture(src, (s + 0.5) / src_size);
+    vec3 c = solid == 1 ? color : tx.rgb;
     float cov = 1.0;
     if (covers == 0) {
         vec2 e = s * pre;  // compose._place scales the matrix columns only
@@ -31,6 +33,7 @@ void main() {
         float cy = clamp(min(e.y - keep.y + 1.0, keep.w - e.y), 0.0, 1.0);
         cov = cx * cy;
     }
+    if (src_alpha == 1 && solid == 0) cov *= tx.a;
     if (has_mask == 1) cov *= texelFetch(mask, p, 0).r;
     float a = cov * opacity;
     frag = vec4(c * a, a);

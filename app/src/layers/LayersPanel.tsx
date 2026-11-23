@@ -3,7 +3,7 @@
 
 import { useEffect, useState } from "react";
 
-import { BLEND_MODES, type Clip, type LookInfo, type Mask, type Project, type Track } from "../engine";
+import { BLEND_MODES, type Clip, type LookInfo, type Mask, type Project, type ShapeStyle, type TextStyle, type Track } from "../engine";
 import { clipValue } from "../live/timeline";
 import { activeOn, animated, ellipseMask, keyAt, keyTimes, rectMask, toggleKeyHere, toggleStopwatch, commitValues, type Param, type RunFn } from "./edit";
 
@@ -28,7 +28,8 @@ interface Props {
   looks?: LookInfo[];
 }
 
-const layerName = (project: Project, c: Clip) => c.name || project.media[c.media_id]?.name || (c.source === "solid" ? "Solid" : c.source === "adjustment" ? "Adjustment layer" : "Layer");
+const layerName = (project: Project, c: Clip) =>
+  c.name || project.media[c.media_id]?.name || (c.source === "text" ? `“${(c.text?.text ?? "").split("\n")[0].slice(0, 30)}”` : c.source === "shape" ? (c.shape?.kind === "ellipse" ? "Ellipse" : "Rectangle") : c.source === "solid" ? "Solid" : c.source === "adjustment" ? "Adjustment layer" : "Layer");
 
 export function LayersPanel({ project, playhead, selClip, onSelectClip, onSeek, run, tool, setTool, doc, looks }: Props) {
   const still = doc !== undefined;
@@ -46,7 +47,7 @@ export function LayersPanel({ project, playhead, selClip, onSelectClip, onSeek, 
     if (!other) return;
     run("track.set", { track_id: track.id, index: project.tracks.indexOf(other) });
   };
-  const addLayer = async (source: "solid" | "adjustment" | "media", mediaId = "") => {
+  const addLayer = async (source: "solid" | "adjustment" | "media" | "text" | "shape", mediaId = "") => {
     const color = source === "solid" ? "#3a6df0" : "#000000";
     if (still) {
       const r = await run("layer.add", { source, doc, media_id: mediaId, color });
@@ -120,7 +121,7 @@ export function LayersPanel({ project, playhead, selClip, onSelectClip, onSeek, 
           )}
         </ul>
         <p className="muted small">A matte on a layer cuts the layer below it, and is not drawn itself.</p>
-        <div className="row">
+        <div className="row" style={{ flexWrap: "wrap" }}>
           {still && (
             <select value="" title="Place another photo of this project as a layer" disabled={images.length === 0}
               onChange={(e) => e.target.value && addLayer("media", e.target.value)}>
@@ -128,6 +129,8 @@ export function LayersPanel({ project, playhead, selClip, onSelectClip, onSeek, 
               {images.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
             </select>
           )}
+          <button onClick={() => addLayer("text")}>+ Text</button>
+          <button onClick={() => addLayer("shape")}>+ Shape</button>
           <button onClick={() => addLayer("solid")}>+ Solid</button>
           <button onClick={() => addLayer("adjustment")}>+ Adjustment</button>
           {!still && <button onClick={() => run("track.add", { kind: "overlay" })}>+ Track</button>}
@@ -239,6 +242,8 @@ function LayerProps({ project, clip, track, playhead, run, onSeek, W, H, still, 
         </select>
         {locked && <p className="muted small">This layer's track is locked.</p>}
       </div>
+      {clip.text && <TextProps clip={clip} text={clip.text} run={run} disabled={locked} />}
+      {clip.shape && <ShapeProps clip={clip} shape={clip.shape} run={run} disabled={locked} />}
       <div className="group">
         <div className="row between">
           <h4>Transform</h4>
@@ -314,6 +319,86 @@ function Slider({ label: text, value, min, max, step, fmt, onCommit, disabled }:
         onChange={(e) => setV(Number(e.target.value))}
         onPointerUp={() => commit(v)}
         onKeyUp={() => commit(v)} />
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------- text and shapes
+
+const WEIGHTS: [number, string][] = [[300, "Light"], [400, "Regular"], [500, "Medium"], [600, "Semibold"], [700, "Bold"], [800, "Extra bold"], [900, "Black"]];
+
+function TextProps({ clip, text, run, disabled }: { clip: Clip; text: TextStyle; run: RunFn; disabled: boolean }) {
+  const [words, setWords] = useState(text.text);
+  useEffect(() => setWords(text.text), [text.text]);
+  const set = (p: Partial<TextStyle>) => run("clip.set_text", { clip_id: clip.id, ...p });
+  const pct = (v: number) => `${(v * 100).toFixed(1)}%`;
+  return (
+    <div className="group">
+      <h4>Text</h4>
+      <textarea rows={3} value={words} disabled={disabled} onChange={(e) => setWords(e.target.value)}
+        onBlur={() => words.trim() && words !== text.text && set({ text: words.slice(0, 2000) })} />
+      <div className="row">
+        <select value={text.font} disabled={disabled} onChange={(e) => set({ font: e.target.value as TextStyle["font"] })} title="Font">
+          <option value="sans">Inter (sans)</option>
+          <option value="display">Montserrat (display)</option>
+          <option value="serif">Playfair (serif)</option>
+        </select>
+        <select value={text.weight} disabled={disabled} onChange={(e) => set({ weight: Number(e.target.value) })} title="Weight">
+          {WEIGHTS.map(([w, n]) => <option key={w} value={w}>{n}</option>)}
+        </select>
+      </div>
+      <div className="row">
+        <label className="row small">
+          <span>Colour</span>
+          <input type="color" style={{ width: 40 }} value={text.color} disabled={disabled} onChange={(e) => set({ color: e.target.value })} />
+        </label>
+        <div className="row tools">
+          {(["left", "center", "right"] as const).map((a) => (
+            <button key={a} className={text.align === a ? "active" : ""} disabled={disabled} onClick={() => set({ align: a })} title={`Align ${a}`}>
+              {a === "left" ? "⯇" : a === "center" ? "≡" : "⯈"}
+            </button>
+          ))}
+        </div>
+      </div>
+      <Slider label="Size" value={text.size} min={0.01} max={0.5} step={0.002} fmt={pct} disabled={disabled} onCommit={(v) => set({ size: v })} />
+      <Slider label="Line height" value={text.line_height} min={0.6} max={3} step={0.05} fmt={(v) => v.toFixed(2)} disabled={disabled} onCommit={(v) => set({ line_height: v })} />
+      <div className="prop">
+        <Slider label="Outline" value={text.stroke_width} min={0} max={0.3} step={0.005} fmt={pct} disabled={disabled} onCommit={(v) => set({ stroke_width: v })} />
+        <input type="color" style={{ width: 40 }} value={text.stroke_color} disabled={disabled} title="Outline colour" onChange={(e) => set({ stroke_color: e.target.value })} />
+      </div>
+    </div>
+  );
+}
+
+function ShapeProps({ clip, shape, run, disabled }: { clip: Clip; shape: ShapeStyle; run: RunFn; disabled: boolean }) {
+  const set = (p: Record<string, unknown>) => run("clip.set_shape", { clip_id: clip.id, ...p });
+  const pct = (v: number) => `${(v * 100).toFixed(1)}%`;
+  return (
+    <div className="group">
+      <h4>Shape</h4>
+      <select value={shape.kind} disabled={disabled} onChange={(e) => set({ kind: e.target.value })}>
+        <option value="rectangle">Rectangle</option>
+        <option value="ellipse">Ellipse</option>
+      </select>
+      <Slider label="Width" value={shape.width} min={0.01} max={2} step={0.005} fmt={pct} disabled={disabled} onCommit={(v) => set({ width: v })} />
+      <Slider label="Height" value={shape.height} min={0.01} max={2} step={0.005} fmt={pct} disabled={disabled} onCommit={(v) => set({ height: v })} />
+      {shape.kind === "rectangle" && (
+        <Slider label="Corner radius" value={shape.radius} min={0} max={0.5} step={0.002} fmt={pct} disabled={disabled} onCommit={(v) => set({ radius: v })} />
+      )}
+      <div className="row">
+        <label className="row small">
+          <input type="checkbox" style={{ width: "auto" }} checked={!!shape.fill} disabled={disabled || (!!shape.fill && shape.stroke_width === 0)}
+            title={shape.fill && shape.stroke_width === 0 ? "Add an outline first" : undefined}
+            onChange={(e) => set({ fill: e.target.checked ? "#ffffff" : "none" })} />
+          <span>Fill</span>
+        </label>
+        {shape.fill && <input type="color" style={{ width: 40 }} value={shape.fill} disabled={disabled} onChange={(e) => set({ fill: e.target.value })} />}
+      </div>
+      <div className="prop">
+        <Slider label="Outline" value={shape.stroke_width} min={0} max={0.2} step={0.001} fmt={pct} disabled={disabled}
+          onCommit={(v) => (v > 0 || shape.fill) && set({ stroke_width: v })} />
+        <input type="color" style={{ width: 40 }} value={shape.stroke_color} disabled={disabled} title="Outline colour" onChange={(e) => set({ stroke_color: e.target.value })} />
+      </div>
     </div>
   );
 }

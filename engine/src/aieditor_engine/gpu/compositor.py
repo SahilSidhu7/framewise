@@ -144,7 +144,7 @@ class Unsupported(Exception):
 
 def _gpu_clip(project: Project, clip: Clip, t: float, w: int, h: int, src: C.RenderSource, seed: int) -> Layer:
     ops = [o for o in clip.ops if not OPS[o.op].geometry and OPS[o.op].category != "subject"]
-    if ops:  # effects run on the placed picture: CPU
+    if ops or clip.vector:  # effects run on the placed picture, text and shapes are drawn: CPU
         img, alpha = C.clip_frame(project, clip, t, w, h, src, seed)
         return CpuLayer(img, alpha)
     key = None

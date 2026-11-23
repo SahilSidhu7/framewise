@@ -29,6 +29,8 @@ interface Props {
   onCommit: (values: Values) => void;
   onMasks: (masks: Mask[]) => void;
   onPenDone: () => void;
+  /** Text and shape layers: the drawn box in layer space (fractions), instead of the whole canvas */
+  bounds?: [number, number, number, number] | null;
 }
 
 type Drag =
@@ -36,7 +38,7 @@ type Drag =
   | { kind: "point"; mask: number; point: number; curve: boolean; x0: number; y0: number; masks: Mask[] }
   | { kind: "pen"; x0: number; y0: number };
 
-export function ViewerOverlay({ project, clip, t, tool, locked, onDraft, onCommit, onMasks, onPenDone }: Props) {
+export function ViewerOverlay({ project, clip, t, tool, locked, onDraft, onCommit, onMasks, onPenDone, bounds }: Props) {
   const { width: W, height: H } = project.settings;
   const svg = useRef<SVGSVGElement>(null);
   const [k, setK] = useState(1); // canvas px per screen px
@@ -74,11 +76,12 @@ export function ViewerOverlay({ project, clip, t, tool, locked, onDraft, onCommi
   const { m } = matrix(clip, t, sw, sh, W, H);
   const inv = invert(m);
   const crop = clip.crop ?? { left: 0, top: 0, right: 0, bottom: 0 };
+  const [bx0, by0, bx1, by1] = bounds ?? [crop.left, crop.top, 1 - crop.right, 1 - crop.bottom];
   const corners = [
-    apply(m, crop.left * sw, crop.top * sh),
-    apply(m, (1 - crop.right) * sw, crop.top * sh),
-    apply(m, (1 - crop.right) * sw, (1 - crop.bottom) * sh),
-    apply(m, crop.left * sw, (1 - crop.bottom) * sh),
+    apply(m, bx0 * sw, by0 * sh),
+    apply(m, bx1 * sw, by0 * sh),
+    apply(m, bx1 * sw, by1 * sh),
+    apply(m, bx0 * sw, by1 * sh),
   ];
   const v = (p: string) => clipValue(clip, p, t);
   const pivot: [number, number] = [W / 2 + v("anchor_x") * W + v("x") * W, H / 2 + v("anchor_y") * H + v("y") * H];

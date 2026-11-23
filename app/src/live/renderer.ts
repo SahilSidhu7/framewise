@@ -43,7 +43,7 @@ export interface Geometry {
   mip: boolean;
 }
 export type LiveLayer =
-  | ({ kind: "source"; el: TexImageSource; key: string; fresh: boolean } & Geometry)
+  | ({ kind: "source"; el: TexImageSource; key: string; fresh: boolean; alpha?: boolean } & Geometry)
   | ({ kind: "solid"; color: [number, number, number] } & Geometry)
   | { kind: "clear"; alpha: number }
   | { kind: "transition"; a: LiveLayer; b: LiveLayer; transition: string; alphaKind: string; p: number };
@@ -356,7 +356,8 @@ export class LiveRenderer {
     const src = l.kind === "source" ? this.sourceTexture(l.key, l.el, l.fresh, l.mip) : this.dummy2d;
     const mask = l.mask ? this.maskTexture(l.maskKey, l.mask) : this.dummy2d;
     this.draw("layer", out, {
-      src, solid: l.kind === "solid" ? 1 : 0, color: l.kind === "solid" ? l.color : [0, 0, 0], inv: l.inv,
+      src, solid: l.kind === "solid" ? 1 : 0, src_alpha: l.kind === "source" && l.alpha ? 1 : 0,
+      color: l.kind === "solid" ? l.color : [0, 0, 0], inv: l.inv,
       src_size: [l.sw, l.sh], keep: l.keep, pre: l.pre, covers: l.covers ? 1 : 0, opacity: l.opacity,
       has_mask: l.mask ? 1 : 0, mask, height: this.size.h,
     });

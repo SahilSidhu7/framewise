@@ -90,7 +90,9 @@ export interface Mask {
 export interface Clip {
   id: string;
   media_id: string;
-  source?: "media" | "solid" | "adjustment";
+  source?: "media" | "solid" | "adjustment" | "text" | "shape";
+  text?: TextStyle | null;
+  shape?: ShapeStyle | null;
   color?: string;
   name?: string;
   transform?: { x: number; y: number; scale: number; rotation: number; anchor_x?: number; anchor_y?: number };
@@ -196,6 +198,32 @@ export interface EditOp {
   op: string;
   params: Record<string, unknown>;
   enabled: boolean;
+}
+
+export interface TextStyle {
+  text: string;
+  font: "sans" | "display" | "serif";
+  weight: number;
+  /** fraction of the canvas short side */
+  size: number;
+  color: string;
+  align: "left" | "center" | "right";
+  line_height: number;
+  stroke_color: string;
+  /** fraction of the font size */
+  stroke_width: number;
+}
+
+export interface ShapeStyle {
+  kind: "rectangle" | "ellipse";
+  /** fractions of the canvas width / height */
+  width: number;
+  height: number;
+  /** fraction of the canvas short side */
+  radius: number;
+  fill: string | null;
+  stroke_color: string;
+  stroke_width: number;
 }
 
 export interface Project {
@@ -380,6 +408,9 @@ export class EngineClient {
 
   // ---- photo
   looks = () => this.request<LookInfo[]>("GET", "/looks");
+  /** Drawn box of a text or shape layer, fractions of the canvas [x0, y0, x1, y1] */
+  layerBounds = async (clipId: string, w: number, h: number) =>
+    (await this.request<{ bounds: [number, number, number, number] }>("GET", `/layers/${clipId}/bounds?w=${w}&h=${h}`)).bounds;
   runAi = (name: string, params: Record<string, unknown>) =>
     this.request<{ result: Record<string, unknown>; revision: number }>("POST", `/commands/${name}`, { params, source: "ai" });
 

@@ -304,6 +304,41 @@ def create_app(token: str | None = None, automation: JobManager | None = None) -
             raise HTTPException(422, str(exc)) from exc
         return Response(data, media_type="image/jpeg")
 
+    def _vector_clip(clip_id: str):
+        session = state.require()
+        with session.bus.lock:
+            try:
+                _, clip = session.bus.project.find_clip(clip_id)
+            except KeyError as exc:
+                raise HTTPException(404, str(exc)) from exc
+            if not clip.vector:
+                raise HTTPException(422, "not a text or shape layer")
+            return clip.model_copy(deep=True)
+
+    @app.get("/layers/{clip_id}/raster", dependencies=secured)
+    def layer_raster(clip_id: str, w: int = Query(ge=2, le=8192), h: int = Query(ge=2, le=8192)) -> Response:
+        """A text or shape layer drawn in layer space: RGBA PNG (sRGB, straight alpha), for the live preview."""
+        import io as _io
+
+        import numpy as np
+        from PIL import Image
+
+        from ..imaging.color import linear_to_srgb
+        from ..video.vector import vector_raster
+
+        rgb, alpha = vector_raster(_vector_clip(clip_id), w, h)
+        px = np.dstack([np.clip(linear_to_srgb(rgb), 0, 1), alpha])
+        buf = _io.BytesIO()
+        Image.fromarray(np.round(px * 255).astype(np.uint8), "RGBA").save(buf, "PNG", compress_level=1)
+        return Response(buf.getvalue(), media_type="image/png", headers={"Cache-Control": "private, max-age=3600"})
+
+    @app.get("/layers/{clip_id}/bounds", dependencies=secured)
+    def layer_bounds(clip_id: str, w: int = Query(ge=2, le=8192), h: int = Query(ge=2, le=8192)) -> dict[str, Any]:
+        """The drawn box of a text or shape layer in layer space, fractions of the canvas [x0, y0, x1, y1]."""
+        from ..video.vector import vector_bounds
+
+        return {"bounds": list(vector_bounds(_vector_clip(clip_id), w, h))}
+
     @app.get("/media/{media_id}/analysis", dependencies=secured)
     def analysis(media_id: str) -> dict[str, Any]:
         return state.require().analysis(media_id)

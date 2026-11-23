@@ -541,8 +541,8 @@ def timeline_to_dsl(p: Project) -> str:
             continue
         layer = t.name.rsplit(" ", 1)[-1] if t.name.startswith("Overlay ") else "1"
         for c in t.clips:
-            if c.source == "adjustment":
-                continue  # edited in the app; the DSL has no adjustment layers yet
+            if c.source in ("adjustment", "text", "shape"):
+                continue  # edited in the app; the DSL has no adjustment, text or shape layers yet
             if c.source == "solid":
                 parts = [f"solid {c.color} at={_fmt(c.start)} dur={_fmt(c.duration)}"]
             else:
