@@ -28,17 +28,10 @@ mkdir -p "$CLIPS"/{inbox,home,n8n}
 [ -d "$CLIPS/.venv" ] || python3 -m venv "$CLIPS/.venv"
 "$CLIPS/.venv/bin/pip" install --quiet --upgrade pip
 "$CLIPS/.venv/bin/pip" install --quiet -e "$CLIPS/app"
-FW="$CLIPS/.venv/bin/framewise"
 
 # Watch-folder settings (kept if you already edited them)
 [ -f "$CLIPS/inbox/framewise-watch.yaml" ] || cp "$HERE/framewise-watch.yaml" "$CLIPS/inbox/"
 cp "$HERE/docker-compose.yml" "$CLIPS/n8n/"
-
-# Pro is needed for serve + watch folders: keep an existing licence, else start the 14-day trial
-if ! "$FW" licence status | grep -q '"pro": true'; then
-  "$FW" licence trial >/dev/null || true
-fi
-"$FW" licence status
 
 # Engine as a user service (starts at boot once lingering is on)
 mkdir -p "$HOME/.config/systemd/user"

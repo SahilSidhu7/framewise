@@ -1,6 +1,5 @@
 import { useState } from "react";
-import { EngineClient, isTauri, type Focus, type LicenceStatus, type Project, type Snapshot } from "./engine";
-import { ProBadge } from "./ProPanel";
+import { EngineClient, isTauri, type Focus, type Project, type Snapshot } from "./engine";
 import { Shell } from "./Shell";
 
 async function pickFolder(): Promise<string | null> {
@@ -14,8 +13,6 @@ interface Props {
   client: EngineClient;
   onOpened: (s: Snapshot) => void;
   focus?: Focus | null;
-  licence?: LicenceStatus | null;
-  onOpenPro?: () => void;
   onSetup?: () => void;
 }
 
@@ -32,7 +29,7 @@ const KINDS: { id: Project["kind"]; title: string; text: string }[] = [
   { id: "collage", title: "Collage", text: "Several photos on one canvas" },
 ];
 
-export function StartScreen({ client, onOpened, focus, licence, onOpenPro, onSetup }: Props) {
+export function StartScreen({ client, onOpened, focus, onSetup }: Props) {
   const [path, setPath] = useState("");
   const [name, setName] = useState(focus === "reels" ? "My reels" : focus === "photos" ? "My photos" : "My project");
   const [kind, setKind] = useState<Project["kind"]>(focus === "photos" ? "photo" : "video");
@@ -60,12 +57,6 @@ export function StartScreen({ client, onOpened, focus, licence, onOpenPro, onSet
     <Shell
       side={
         <div className="side-stack">
-          {onOpenPro && (
-            <div className="side-block">
-              <span className="label">Plan</span>
-              <ProBadge status={licence ?? null} onClick={onOpenPro} />
-            </div>
-          )}
           {onSetup && (
             <button type="button" className="link" onClick={onSetup}>
               Run setup again

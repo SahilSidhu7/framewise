@@ -1,6 +1,5 @@
 import { useState } from "react";
-import { EngineClient, isTauri, type LicenceStatus, type MediaItem, type Snapshot } from "./engine";
-import { ProBadge } from "./ProPanel";
+import { EngineClient, isTauri, type MediaItem, type Snapshot } from "./engine";
 import { Logo } from "./Shell";
 import { PhotoEditor } from "./PhotoEditor";
 import { VideoEditor } from "./VideoEditor";
@@ -24,11 +23,9 @@ interface Props {
   client: EngineClient;
   snapshot: Snapshot;
   proxyProgress: Record<string, number>;
-  licence?: LicenceStatus | null;
-  onOpenPro?: () => void;
 }
 
-export function Editor({ client, snapshot, proxyProgress, licence, onOpenPro }: Props) {
+export function Editor({ client, snapshot, proxyProgress }: Props) {
   const { project } = snapshot;
   const [selected, setSelected] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -77,7 +74,6 @@ export function Editor({ client, snapshot, proxyProgress, licence, onOpenPro }: 
           {project.kind.toUpperCase()} · {project.settings.width}×{project.settings.height} · {project.settings.fps} FPS
         </span>
         <div className="spacer" />
-        {onOpenPro && <ProBadge status={licence ?? null} onClick={onOpenPro} />}
         <button disabled={!snapshot.can_undo} title={snapshot.undo_label ?? ""} onClick={() => guard(client.undo)}>
           Undo
         </button>

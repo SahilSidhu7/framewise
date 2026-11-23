@@ -13,16 +13,17 @@ def test_migrate_legacy(tmp_path: Path) -> None:
     old, new = tmp_path / "AIEditor", tmp_path / "Framewise"
     (old / "models").mkdir(parents=True)
     (old / "models" / "m.gguf").write_text("model")
-    (old / "licence.json").write_text('{"key": "x"}')
+    (old / "automation").mkdir()
+    (old / "automation" / "keys.json").write_text("{}")
     (old / "aieditor-engine.exe").write_text("program file")  # program files stay
     new.mkdir()
     (new / "app.json").write_text('{"onboarded": true}')
     (old / "app.json").write_text('{"onboarded": false}')  # never overwrites newer data
 
     moved = migrate_legacy(new, old)
-    assert sorted(moved) == ["licence.json", "models"]
+    assert sorted(moved) == ["automation", "models"]
     assert (new / "models" / "m.gguf").read_text() == "model"
-    assert (new / "licence.json").exists() and not (old / "licence.json").exists()
+    assert (new / "automation" / "keys.json").exists() and not (old / "automation").exists()
     assert (old / "aieditor-engine.exe").exists()
     assert (new / "app.json").read_text() == '{"onboarded": true}'
     assert migrate_legacy(new, old) == []  # idempotent

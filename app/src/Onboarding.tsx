@@ -1,9 +1,8 @@
 import { useEffect, useState } from "react";
-import type { Benchmark, EngineClient, Focus, LicenceStatus, SystemInfo } from "./engine";
-import { ProPanel } from "./ProPanel";
+import type { Benchmark, EngineClient, Focus, SystemInfo } from "./engine";
 import { Shell } from "./Shell";
 
-const STEPS = ["Welcome", "Your PC", "What you'll make", "Pro"] as const;
+const STEPS = ["Welcome", "Your PC", "What you'll make"] as const;
 
 const FOCUS: { id: Focus; title: string; text: string }[] = [
   { id: "videos", title: "Videos", text: "Holiday clips, vlogs, family movies" },
@@ -53,12 +52,10 @@ function checks(info: SystemInfo): Check[] {
 
 interface Props {
   client: EngineClient;
-  licence: LicenceStatus | null;
-  onLicence: (s: LicenceStatus) => void;
   onDone: (focus: Focus | null) => void;
 }
 
-export function Onboarding({ client, licence, onLicence, onDone }: Props) {
+export function Onboarding({ client, onDone }: Props) {
   const [step, setStep] = useState(0);
   const [info, setInfo] = useState<SystemInfo | null>(null);
   const [bench, setBench] = useState<Benchmark | null>(null);
@@ -90,8 +87,8 @@ export function Onboarding({ client, licence, onLicence, onDone }: Props) {
           {step === 0 ? "Get started" : "Continue"}
         </button>
       ) : (
-        <button className={licence?.pro ? "primary" : ""} disabled={saving} onClick={finish}>
-          {licence?.pro ? "Open Framewise" : "Continue with Free"}
+        <button className="primary" disabled={saving} onClick={finish}>
+          Open Framewise
         </button>
       )}
     </>
@@ -160,15 +157,6 @@ export function Onboarding({ client, licence, onLicence, onDone }: Props) {
             </div>
           </div>
         )}
-
-        {step === 3 && (
-          <div className="ob-body">
-            <h2>{focus === "automation" ? "Automation is a Pro feature" : "Want automation too?"}</h2>
-            <p className="muted">Editing in the app is free forever. Pro adds the automation API, watch folders, batches and more reels per video. Try it free for 14 days, or skip this.</p>
-            <ProPanel client={client} status={licence} onChange={onLicence} />
-          </div>
-        )}
-
     </Shell>
   );
 }

@@ -205,14 +205,6 @@ export interface EngineEvent {
   [key: string]: unknown;
 }
 
-export interface LicenceStatus {
-  tier: "free" | "trial" | "pro" | "studio";
-  pro: boolean;
-  licence: { id: string; plan: string; to: string; seats: number; issued: number; expires: number | null } | null;
-  trial_days_left: number | null;
-  problem: string | null;
-}
-
 export interface SystemInfo {
   os: string;
   cpu: string;
@@ -348,15 +340,11 @@ export class EngineClient {
     return URL.createObjectURL(await res.blob());
   }
 
-  // ---- onboarding, licence
+  // ---- onboarding
   appSettings = () => this.request<AppSettings>("GET", "/app/settings");
   saveAppSettings = (changes: Partial<AppSettings>) => this.request<AppSettings>("POST", "/app/settings", changes);
   system = () => this.request<SystemInfo>("GET", "/system");
   benchmark = () => this.request<Benchmark>("POST", "/system/benchmark");
-  licence = () => this.request<LicenceStatus>("GET", "/licence");
-  activateLicence = (key: string) => this.request<LicenceStatus>("POST", "/licence/activate", { key });
-  startTrial = () => this.request<LicenceStatus>("POST", "/licence/trial");
-  deactivateLicence = () => this.request<LicenceStatus>("DELETE", "/licence");
 
   // ---- subject selection
   subject = (mediaId: string, point = "auto", t?: number) =>

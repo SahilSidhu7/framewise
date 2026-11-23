@@ -34,7 +34,6 @@ from typing import Any
 from pydantic import BaseModel, Field, field_validator, model_validator
 
 from ..agent.options import OutputOptions
-from ..licence import LicenceRequired, LicenceStore
 from . import recipes as R
 from .home import automation_home
 from .keys import KeyStore
@@ -117,13 +116,8 @@ class JobRequest(BaseModel):
 
 class JobManager:
     def __init__(self, home: Path | str | None = None, *, workers: int = 1, keep_days: float = 7,
-                 allow_urls: bool = True, start: bool = True, licence: LicenceStore | None = None,
-                 pro_feature: str | None = None) -> None:
-        """licence: apply free-tier limits unless it is Pro / trial (None = no limits, for embedding and tests).
-        pro_feature: every job needs Pro for this feature (e.g. "serve" for the headless API)."""
+                 allow_urls: bool = True, start: bool = True) -> None:
         self.home = automation_home(home)
-        self.licence = licence
-        self.pro_feature = pro_feature
         self.keys = KeyStore(self.home)
         self.keep_days = keep_days
         self.allow_urls = allow_urls
@@ -213,16 +207,12 @@ class JobManager:
         if recipe.needs_prompt and not req.prompt:
             raise JobError(f"recipe {recipe.name} needs a prompt")
         req.hook()  # validates a plain-string webhook url
-        try:
-            notes = self._free_limits(recipe.name, req, len(refs))
-        except LicenceRequired as exc:
-            raise JobError(str(exc), 402) from exc
         jid = "j_" + secrets.token_hex(6)
         job = {
             "id": jid, "recipe": recipe.name, "label": req.label or f"{recipe.title}: {', '.join(names)[:80]}",
             "state": "queued", "progress": 0.0, "stage": "Waiting", "error": None, "result": None, "outputs": [],
             "inputs": names, "created": time.time(), "started": None, "finished": None, "owner": owner,
-            "request": req.model_dump(mode="json"), "webhook": None, "notes": notes,
+            "request": req.model_dump(mode="json"), "webhook": None, "notes": [],
         }
         (self.home / "jobs" / jid).mkdir(parents=True)
         with self._lock:
@@ -232,25 +222,6 @@ class JobManager:
         self._queue.put(jid)
         self._emit(job)
         return self.public(job)
-
-    def _free_limits(self, recipe: str, req: JobRequest, n_inputs: int) -> list[str]:
-        """Raise LicenceRequired for Pro-only requests; trim what the free tier allows less of. Returns notes."""
-        if self.licence is None:
-            return []
-        if self.pro_feature:
-            self.licence.require(self.pro_feature)
-        if self.licence.is_pro():
-            return []
-        if req.webhook:
-            raise LicenceRequired("webhook")
-        if recipe == "photo_edit" and n_inputs > 1:
-            raise LicenceRequired("batch")
-        if recipe == "reel" and (int(req.options.get("count", 3)) > 1 or (req.output and (req.output.versions or 1) > 1)):
-            req.options = {**req.options, "count": 1}
-            if req.output and req.output.versions:
-                req.output = req.output.model_copy(update={"versions": 1})
-            return ["The free version makes 1 reel per video; Pro makes up to 10."]
-        return []
 
     def run_now(self, req: JobRequest, *, allow_local: bool = True,
                 on_progress: Callable[[dict[str, Any]], None] | None = None) -> dict[str, Any]:

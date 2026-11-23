@@ -1,9 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { EngineClient, type AppSettings, type EngineEvent, type LicenceStatus, type Snapshot } from "./engine";
+import { EngineClient, type AppSettings, type EngineEvent, type Snapshot } from "./engine";
 import { StartScreen } from "./StartScreen";
 import { Editor } from "./Editor";
 import { Onboarding } from "./Onboarding";
-import { ProModal } from "./ProPanel";
 
 export default function App() {
   const [client, setClient] = useState<EngineClient | null>(null);
@@ -12,8 +11,6 @@ export default function App() {
   const [proxyProgress, setProxyProgress] = useState<Record<string, number>>({});
   const refreshTimer = useRef<number | undefined>(undefined);
   const [settings, setSettings] = useState<AppSettings | null>(null);
-  const [licence, setLicence] = useState<LicenceStatus | null>(null);
-  const [showPro, setShowPro] = useState(false);
 
   useEffect(() => {
     EngineClient.connect().then(setClient, (e) => setFatal(String(e.message ?? e)));
@@ -23,7 +20,6 @@ export default function App() {
     if (!client) return;
     // Older engines without these routes: skip onboarding rather than block the editor.
     client.appSettings().then(setSettings, () => setSettings({ onboarded: true, focus: null }));
-    client.licence().then(setLicence, () => undefined);
   }, [client]);
 
   const refresh = useCallback(() => {
@@ -61,18 +57,10 @@ export default function App() {
   }
   if (!settings.onboarded) {
     return (
-      <Onboarding
-        client={client}
-        licence={licence}
-        onLicence={setLicence}
-        onDone={(focus) => setSettings({ onboarded: true, focus })}
-      />
+      <Onboarding client={client} onDone={(focus) => setSettings({ onboarded: true, focus })} />
     );
   }
 
-  const pro = showPro && (
-    <ProModal client={client} status={licence} onChange={setLicence} onClose={() => setShowPro(false)} />
-  );
   const reopenSetup = () => {
     client.saveAppSettings({ onboarded: false }).catch(() => undefined);
     setSettings({ ...settings, onboarded: false });
@@ -80,23 +68,8 @@ export default function App() {
 
   if (!snapshot) {
     return (
-      <>
-        <StartScreen
-          client={client}
-          onOpened={setSnapshot}
-          focus={settings.focus}
-          licence={licence}
-          onOpenPro={() => setShowPro(true)}
-          onSetup={reopenSetup}
-        />
-        {pro}
-      </>
+      <StartScreen client={client} onOpened={setSnapshot} focus={settings.focus} onSetup={reopenSetup} />
     );
   }
-  return (
-    <>
-      <Editor client={client} snapshot={snapshot} proxyProgress={proxyProgress} licence={licence} onOpenPro={() => setShowPro(true)} />
-      {pro}
-    </>
-  );
+  return <Editor client={client} snapshot={snapshot} proxyProgress={proxyProgress} />;
 }

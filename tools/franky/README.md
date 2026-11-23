@@ -22,9 +22,7 @@ powershell -ExecutionPolicy Bypass -File tools/franky/deploy.ps1
 
 It copies the engine, installs it in `~/framewise-clips/.venv` and starts the user service
 `framewise-clips` (`framewise serve --watch ~/framewise-clips/inbox`, API on 127.0.0.1 only).
-Needs Python 3.12+ on the server. Pro (needed for serve + watch folders) starts as the 14-day trial;
-for longer, issue a key with `tools/licence_issuer.py` and put it in the service as
-`Environment=FRAMEWISE_LICENSE=...`.
+Needs Python 3.12+ on the server.
 
 ## Use
 

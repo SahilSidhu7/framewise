@@ -22,7 +22,7 @@ from typing import Any
 
 import numpy as np
 
-from .licence import config_dir
+from .paths import config_dir
 
 REEL_SECONDS = 30
 REEL_FPS = 30

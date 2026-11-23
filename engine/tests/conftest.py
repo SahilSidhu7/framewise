@@ -10,16 +10,11 @@ from PIL import Image
 
 
 @pytest.fixture(autouse=True)
-def licence_config(tmp_path_factory: pytest.TempPathFactory, monkeypatch: pytest.MonkeyPatch) -> Path:
-    """Keep tests away from the real licence file; Pro (trial) by default so automation tests see every feature."""
-    from aieditor_engine.licence import LicenceStore
-
+def config_folder(tmp_path_factory: pytest.TempPathFactory, monkeypatch: pytest.MonkeyPatch) -> Path:
+    """Keep tests away from the real config folder (app.json and friends)."""
     folder = tmp_path_factory.mktemp("config")
     monkeypatch.setenv("FRAMEWISE_CONFIG", str(folder))
     monkeypatch.delenv("AIEDITOR_CONFIG", raising=False)
-    monkeypatch.delenv("AIEDITOR_LICENSE", raising=False)
-    monkeypatch.delenv("AIEDITOR_LICENCE", raising=False)
-    LicenceStore(folder).start_trial()
     return folder
 
 

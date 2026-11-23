@@ -8,7 +8,6 @@
     framewise captions talk.mp4 --set style=boxed
     framewise watch ~/Videos/inbox --recipe reel
     framewise mcp                           # MCP server on stdio for AI agents
-    framewise licence trial | activate KEY  # Pro: API, watch folders, batches, webhooks, several reels
 
 One-shot commands run in this process (no server needed) and print a JSON
 summary with the output paths on stdout; progress goes to stderr.
@@ -86,9 +85,7 @@ def _progress(job: dict[str, Any]) -> None:
 def cmd_run(args: argparse.Namespace, recipe: str | None) -> int:
     from .automation.jobs import JobError, JobManager, JobRequest
 
-    from .licence import LicenceStore
-
-    manager = JobManager(args.home, start=False, licence=LicenceStore())
+    manager = JobManager(args.home, start=False)
     try:
         req = JobRequest.model_validate(_request(args, recipe, args.files))
         job = manager.run_now(req, on_progress=None if args.quiet else _progress)
@@ -120,16 +117,11 @@ def cmd_serve(args: argparse.Namespace) -> int:
     from .api.server import create_app
     from .automation.jobs import JobManager
     from .automation.watch import FolderWatcher
-    from .licence import LicenceStore
-
-    licence = LicenceStore()
-    if not _pro_or_explain(licence, "serve"):
-        return 3
     loopback = args.host in ("127.0.0.1", "localhost", "::1")
     if not loopback and not args.allow_lan:
         print("Refusing to listen on a network address without --allow-lan.", file=sys.stderr)
         return 2
-    manager = JobManager(args.home, workers=args.workers, keep_days=args.keep_days, licence=licence, pro_feature="serve")
+    manager = JobManager(args.home, workers=args.workers, keep_days=args.keep_days)
     if not loopback:
         print("WARNING: the API is reachable from your network. Anyone with an API key can run jobs on this computer.\n"
               "Use keys without the `local` scope for other machines, and never expose this port to the internet\n"
@@ -152,12 +144,8 @@ def cmd_serve(args: argparse.Namespace) -> int:
 def cmd_watch(args: argparse.Namespace) -> int:
     from .automation.jobs import JobManager
     from .automation.watch import FolderWatcher
-    from .licence import LicenceStore
 
-    licence = LicenceStore()
-    if not _pro_or_explain(licence, "watch"):
-        return 3
-    manager = JobManager(args.home, workers=1, licence=licence, pro_feature="watch")
+    manager = JobManager(args.home, workers=1)
     body = _request(args, args.recipe, [])
     body.pop("inputs")
     w = FolderWatcher(manager, Path(args.folder), body, interval=args.interval)
@@ -169,20 +157,6 @@ def cmd_watch(args: argparse.Namespace) -> int:
         stop.set()
     manager.shutdown()
     return 0
-
-
-def _pro_or_explain(licence: Any, feature: str) -> bool:
-    from .licence import LicenceRequired
-
-    try:
-        licence.require(feature)
-    except LicenceRequired as exc:
-        print(exc, file=sys.stderr)
-        return False
-    st = licence.status()
-    if st["tier"] == "trial":
-        print(f"Framewise Pro trial: {st['trial_days_left']} day(s) left.", file=sys.stderr)
-    return True
 
 
 def cmd_models(args: argparse.Namespace) -> int:
@@ -209,29 +183,6 @@ def _bar(f: float) -> None:
     n = int(f * 30)
     sys.stderr.write(f"\r[{'#' * n}{'.' * (30 - n)}] {f * 100:5.1f}%")
     sys.stderr.flush()
-
-
-def cmd_licence(args: argparse.Namespace) -> int:
-    from .licence import LicenceError, LicenceStore
-
-    store = LicenceStore()
-    try:
-        if args.action == "activate":
-            if not args.key:
-                print("usage: framewise licence activate KEY", file=sys.stderr)
-                return 2
-            st = store.activate(args.key)
-        elif args.action == "trial":
-            st = store.start_trial()
-        elif args.action == "deactivate":
-            st = store.deactivate()
-        else:
-            st = store.status()
-    except LicenceError as exc:
-        print(json.dumps({"error": str(exc), **store.status()}, indent=1))
-        return 1
-    print(json.dumps(st, indent=1))
-    return 0
 
 
 def cmd_keys(args: argparse.Namespace) -> int:
@@ -303,9 +254,6 @@ def main(argv: list[str] | None = None) -> int:
     mo.add_argument("action", nargs="?", default="list", choices=["list", "install"])
     mo.add_argument("name", nargs="?")
     mo.add_argument("--quiet", action="store_true")
-    lc = sub.add_parser("licence", aliases=["license"], help="Pro licence: status, activate KEY, trial, deactivate")
-    lc.add_argument("action", nargs="?", default="status", choices=["status", "activate", "trial", "deactivate"])
-    lc.add_argument("key", nargs="?")
 
     args = parser.parse_args(argv)
     logging.basicConfig(level=args.log_level.upper(), stream=sys.stderr)
@@ -321,8 +269,6 @@ def main(argv: list[str] | None = None) -> int:
         return cmd_keys(args)
     if args.cmd == "models":
         return cmd_models(args)
-    if args.cmd in ("licence", "license"):
-        return cmd_licence(args)
     if args.cmd == "recipes":
         from .automation.recipes import catalog
 

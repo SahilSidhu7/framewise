@@ -2,11 +2,11 @@
 
 Data folder: %LOCALAPPDATA%/Framewise (Windows), ~/Library/Application Support/Framewise
 (macOS), $XDG_DATA_HOME/Framewise (Linux). It holds models/, runtime/ (whisper, llama),
-automation/, licence.json and app.json.
+automation/ and app.json.
 
 The product used to be called AIEditor. On first use, data found in the old
-%LOCALAPPDATA%/AIEditor folder (models, runtimes, jobs, licence, settings) is moved
-into the new folder, so nothing has to be downloaded or activated again. Program
+%LOCALAPPDATA%/AIEditor folder (models, runtimes, jobs, settings) is moved
+into the new folder, so nothing has to be downloaded again. Program
 files of an old install are left where they are.
 
 Environment variables are read as FRAMEWISE_<NAME>, falling back to the old
@@ -26,7 +26,7 @@ log = logging.getLogger(__name__)
 
 APP = "Framewise"
 LEGACY = "AIEditor"
-MOVABLE = ("models", "runtime", "automation", "dl", "licence.json", "app.json")
+MOVABLE = ("models", "runtime", "automation", "dl", "app.json")
 _lock = threading.Lock()
 _migrated = False
 
@@ -77,3 +77,10 @@ def data_root() -> Path:
                 log.warning("data migration skipped: %s", exc)
         root.mkdir(parents=True, exist_ok=True)
     return root
+
+
+def config_dir() -> Path:
+    """FRAMEWISE_CONFIG, else the data folder (paths.data_root); shared by the app and the CLI."""
+    base = Path(env("CONFIG")).expanduser() if env("CONFIG") else data_root()
+    base.mkdir(parents=True, exist_ok=True)
+    return base

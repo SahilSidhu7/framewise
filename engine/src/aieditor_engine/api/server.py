@@ -59,10 +59,6 @@ class CreateProjectBody(BaseModel):
     kind: ProjectKind = ProjectKind.VIDEO
 
 
-class LicenceBody(BaseModel):
-    key: str = Field(max_length=4000)
-
-
 class OpenProjectBody(BaseModel):
     path: str
 
@@ -340,34 +336,6 @@ def create_app(token: str | None = None, automation: JobManager | None = None) -
             return plan(body.prompt, session.analysis(body.media_id), to_dsl(stack), body.variations, body.style, body.output)
         except OptionError as exc:
             raise HTTPException(422, str(exc)) from exc
-
-    # ------------------------------------------------------------- licence
-    from ..licence import LicenceError, LicenceStore
-
-    licence_store = automation.licence if automation is not None and automation.licence else LicenceStore()
-
-    @app.get("/licence", dependencies=secured)
-    def licence_status() -> dict[str, Any]:
-        """Free / trial / pro, for the app's About and Pro screens."""
-        return licence_store.status()
-
-    @app.post("/licence/activate", dependencies=secured)
-    def licence_activate(body: LicenceBody) -> dict[str, Any]:
-        try:
-            return licence_store.activate(body.key)
-        except LicenceError as exc:
-            raise HTTPException(422, str(exc)) from exc
-
-    @app.post("/licence/trial", dependencies=secured)
-    def licence_trial() -> dict[str, Any]:
-        try:
-            return licence_store.start_trial()
-        except LicenceError as exc:
-            raise HTTPException(409, str(exc)) from exc
-
-    @app.delete("/licence", dependencies=secured)
-    def licence_deactivate() -> dict[str, Any]:
-        return licence_store.deactivate()
 
     # ----------------------------------------------------- onboarding / system
     from ..system import AppSettings, benchmark, system_info

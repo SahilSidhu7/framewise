@@ -138,9 +138,7 @@ class McpServer:
 
 
 def serve_stdio(home: str | Path | None = None) -> int:
-    from ..licence import LicenceStore
-
-    manager = JobManager(home, workers=1, licence=LicenceStore())
+    manager = JobManager(home, workers=1)
     try:
         McpServer(manager).serve(sys.stdin, sys.stdout)
     finally:
