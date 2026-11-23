@@ -1,6 +1,12 @@
 # Framewise
 
-A local, beginner-first AI photo and video editor. See [PLAN.md](PLAN.md) for the full design and roadmap.
+**The free, open-source CapCut / Photoshop / After Effects alternative.** A local, beginner-first photo and video
+editor with on-device AI: clip long videos into highlights and captioned reels, edit photos from a sentence, and
+(next on the roadmap) work in layers with GPU compositing. Everything runs on your PC. No account, no subscription,
+no watermark, no paid tier.
+
+Licensed under the [GNU AGPL-3.0](LICENSE). See [CONTRIBUTING.md](CONTRIBUTING.md) to get set up,
+[docs/licences.md](docs/licences.md) for third-party licences, and [PLAN.md](PLAN.md) for the full design and roadmap.
 
 **Status: working photo and video editor with local AI (M0, M1, first AI milestone, video v1).**
 
@@ -89,7 +95,7 @@ no admin rights). The engine is one frozen binary (`framewise-engine.exe`, start
 called with a command (`framewise-engine.exe reel ...` or `... cli ...`) it is the `framewise` command line, and the
 installer drops an `framewise.cmd` launcher into `%LOCALAPPDATA%\Microsoft\WindowsApps` (already on PATH) so
 `framewise` works in any terminal. Uninstalling removes the program files and that launcher, never the user's
-models, licence or jobs. The installer is not code-signed yet, so Windows SmartScreen will warn.
+models or jobs. The installer is not code-signed yet, so Windows SmartScreen will warn.
 
 ## Automation (n8n, scripts, AI agents)
 ```bash
@@ -102,12 +108,8 @@ Public job API under `/v1` (API keys, uploads, jobs, long-poll, signed webhooks)
 `captions`, `video_edit`, `photo_edit`, `render_program`, `transcribe`. See [integrations/README.md](integrations/README.md)
 for the HTTP API, webhooks, the n8n node and template, watch folders and MCP.
 
-**Free vs Pro.** The desktop editor is free. One-shot `framewise` commands and MCP are free with limits (one reel per
-video, one photo per job, no webhooks). Pro unlocks `framewise serve`, watch folders, batches, webhooks and up to 10
-reels per video. `framewise licence trial` starts a 14-day trial once; `framewise licence activate KEY` adds a key
-(or set `AIEDITOR_LICENSE` on servers and in containers). Keys are Ed25519-signed and checked offline; the app also
-exposes `GET/POST/DELETE /licence`. Keys are made with `tools/licence_issuer.py` and a private key that stays
-outside this repository.
+Everything here is free, with no limits: `framewise serve`, watch folders, batches, webhooks and several reels per video
+all work without a key or an account.
 
 ## Engine API (localhost only, token required)
 | Method | Path | Purpose |
@@ -132,4 +134,13 @@ Every command, from a person or the AI, is appended to `logs/trajectory.jsonl` i
 - `site/`: the public landing page, a static site on Cloudflare Pages (project `framewise`, https://framewise-7qq.pages.dev).
   Deploy with `npx wrangler pages deploy site --project-name framewise --branch main`.
 - `docs/architecture.html`: low-level design tour (components, data model, flows, rendering, caption placement,
-  jobs, licensing, installer) with Mermaid diagrams.
+  jobs, installer) with Mermaid diagrams.
+
+## Licence
+Framewise is free software: you can redistribute it and/or modify it under the terms of the
+[GNU Affero General Public License v3.0](LICENSE). If you run a modified version as a network service, you must offer
+its source to the users of that service. Third-party components and models keep their own licences; see
+[docs/licences.md](docs/licences.md).
+
+The project is sustained by GitHub Sponsors, Open Collective, optional paid style/VFX/music packs and, later, an optional
+pay-per-use hosted render. See [BUSINESS.md](BUSINESS.md).
