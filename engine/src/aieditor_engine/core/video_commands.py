@@ -22,6 +22,7 @@ from .project import (
     LayerSource,
     Marker,
     Mask,
+    MediaKind,
     MatteMode,
     Motion,
     Project,
@@ -428,7 +429,9 @@ def clip_set_masks(p: Project, a: MasksParams) -> None:
 
 
 class LayerAddParams(BaseModel):
-    source: LayerSource = Field(description="solid (a colour) or adjustment (effects on everything below)")
+    source: LayerSource = Field(description="solid (a colour), adjustment (effects on everything below) or media (photo documents: an image)")
+    media_id: str = Field("", description="source=media: the image to place")
+    doc: str | None = Field(None, description="Photo media_id: add the layer to that photo's layer stack instead of the timeline")
     start: float = Field(0.0, ge=0)
     duration: float = Field(5.0, gt=0, le=36000)
     color: str = Field("#000000", pattern=r"^#[0-9a-fA-F]{6}$")
@@ -438,8 +441,16 @@ class LayerAddParams(BaseModel):
 
 @command("layer.add", LayerAddParams, "Add a solid colour or adjustment layer on its own track (or a given one).", "timeline")
 def layer_add(p: Project, a: LayerAddParams) -> dict:
+    if a.doc is not None:
+        doc = p.media.get(a.doc)
+        if doc is None or doc.kind != MediaKind.IMAGE:
+            raise CommandError(f"photo not found: {a.doc}")
     if a.source == "media":
-        raise CommandError("use clip.add for media")
+        item = p.media.get(a.media_id)
+        if a.doc is None:
+            raise CommandError("use clip.add for media on the timeline")
+        if item is None or item.kind != MediaKind.IMAGE:
+            raise CommandError(f"image not found: {a.media_id}")
     if a.track_id:
         track = p.find_track(a.track_id)
         if track.kind == "audio":
@@ -447,10 +458,16 @@ def layer_add(p: Project, a: LayerAddParams) -> dict:
         if any(c.start < a.start + a.duration and a.start < c.end for c in track.clips):
             raise CommandError("overlaps another clip on that track")
     else:
-        track = Track(id=new_id("trk"), kind="overlay", name="Adjustment" if a.source == "adjustment" else "Solid")
-        p.tracks.append(track)
-    clip = Clip(id=new_id("clp"), source=a.source, start=a.start, in_point=0.0, out_point=a.duration,
-                color=a.color, name=a.name or ("Adjustment layer" if a.source == "adjustment" else "Solid"))
+        default = {"adjustment": "Adjustment", "solid": "Solid", "media": p.media[a.media_id].name if a.source == "media" else ""}
+        track = Track(id=new_id("trk"), kind="overlay", name=(a.name or default[a.source])[:40])
+        (p.layers.setdefault(a.doc, []) if a.doc is not None else p.tracks).append(track)
+    if a.source == "media":
+        # a placed image starts fitted inside the photo at half size
+        clip = Clip(id=new_id("clp"), media_id=a.media_id, start=a.start, in_point=0.0, out_point=a.duration, fit="fit", name=a.name)
+        clip.transform.scale = 0.5
+    else:
+        clip = Clip(id=new_id("clp"), source=a.source, start=a.start, in_point=0.0, out_point=a.duration,
+                    color=a.color, name=a.name or ("Adjustment layer" if a.source == "adjustment" else "Solid"))
     track.clips.append(clip)
     track.clips.sort(key=lambda c: c.start)
     return {"clip_id": clip.id, "track_id": track.id}
@@ -476,8 +493,9 @@ def track_set(p: Project, a: TrackSetParams) -> None:
     if a.matte is not None:
         track.matte = None if a.matte == "none" else a.matte
     if a.index is not None:
-        p.tracks.remove(track)
-        p.tracks.insert(min(a.index, len(p.tracks)), track)
+        stack = p.stack_of(track)
+        stack.remove(track)
+        stack.insert(min(a.index, len(stack)), track)
 
 
 class TrackRemoveParams(BaseModel):
@@ -487,7 +505,7 @@ class TrackRemoveParams(BaseModel):
 @command("track.remove", TrackRemoveParams, "Delete a track and the clips on it.", "timeline")
 def track_remove(p: Project, a: TrackRemoveParams) -> dict:
     track = p.find_track(a.track_id)
-    p.tracks.remove(track)
+    p.stack_of(track).remove(track)
     return {"clips_removed": len(track.clips)}
 
 

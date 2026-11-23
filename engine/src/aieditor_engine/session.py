@@ -105,6 +105,13 @@ class Session:
             stack = [o.model_dump(mode="json") for o in self.bus.project.edits.get(media_id, [])]
         return Path(item.path), stack
 
+    def photo_overlay(self, media_id: str):
+        """(draw layers over the edited photo, cache key), or (None, "") without layers."""
+        from .imaging.photo_layers import overlay
+
+        with self.bus.lock:
+            return overlay(self.bus.project, media_id)
+
     def analysis(self, media_id: str) -> dict[str, Any]:
         """L1 measurements of the *original* photo, cached per media."""
         if media_id not in self._analysis:

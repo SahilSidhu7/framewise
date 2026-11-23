@@ -217,6 +217,8 @@ export interface Project {
   };
   media: Record<string, MediaItem>;
   tracks: Track[];
+  /** photo media_id -> layer tracks over the edited photo (bottom first) */
+  layers?: Record<string, Track[]>;
   edits: Record<string, EditOp[]>;
   grade: EditOp[];
   captions: Caption[];

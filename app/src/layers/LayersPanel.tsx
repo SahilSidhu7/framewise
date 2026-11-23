@@ -3,7 +3,7 @@
 
 import { useEffect, useState } from "react";
 
-import { BLEND_MODES, type Clip, type Mask, type Project, type Track } from "../engine";
+import { BLEND_MODES, type Clip, type LookInfo, type Mask, type Project, type Track } from "../engine";
 import { clipValue } from "../live/timeline";
 import { activeOn, animated, ellipseMask, keyAt, keyTimes, rectMask, toggleKeyHere, toggleStopwatch, commitValues, type Param, type RunFn } from "./edit";
 
@@ -22,11 +22,17 @@ interface Props {
   run: RunFn;
   tool: Tool;
   setTool: (t: Tool) => void;
+  /** Photo document: the photo's media id. Layers are added to its stack, and there is no time. */
+  doc?: string;
+  /** Looks offered on adjustment layers */
+  looks?: LookInfo[];
 }
 
 const layerName = (project: Project, c: Clip) => c.name || project.media[c.media_id]?.name || (c.source === "solid" ? "Solid" : c.source === "adjustment" ? "Adjustment layer" : "Layer");
 
-export function LayersPanel({ project, playhead, selClip, onSelectClip, onSeek, run, tool, setTool }: Props) {
+export function LayersPanel({ project, playhead, selClip, onSelectClip, onSeek, run, tool, setTool, doc, looks }: Props) {
+  const still = doc !== undefined;
+  const images = still ? Object.values(project.media).filter((m) => m.kind === "image" && m.id !== doc) : [];
   const visual = project.tracks.filter((t) => t.kind !== "audio");
   const top = [...visual].reverse();
   const entry = selClip ? project.tracks.flatMap((track) => track.clips.map((clip) => ({ track, clip }))).find((e) => e.clip.id === selClip) : undefined;
@@ -40,9 +46,15 @@ export function LayersPanel({ project, playhead, selClip, onSelectClip, onSeek, 
     if (!other) return;
     run("track.set", { track_id: track.id, index: project.tracks.indexOf(other) });
   };
-  const addLayer = async (source: "solid" | "adjustment") => {
+  const addLayer = async (source: "solid" | "adjustment" | "media", mediaId = "") => {
+    const color = source === "solid" ? "#3a6df0" : "#000000";
+    if (still) {
+      const r = await run("layer.add", { source, doc, media_id: mediaId, color });
+      if (r?.clip_id) onSelectClip(r.clip_id as string);
+      return;
+    }
     const start = Math.min(playhead, Math.max(0, end - 0.5));
-    const r = await run("layer.add", { source, start, duration: Math.max(1, Math.min(5, (end || 5) - start)), color: source === "solid" ? "#3a6df0" : "#000000" });
+    const r = await run("layer.add", { source, start, duration: Math.max(1, Math.min(5, (end || 5) - start)), color });
     if (r?.clip_id) onSelectClip(r.clip_id as string);
   };
 
@@ -77,7 +89,7 @@ export function LayersPanel({ project, playhead, selClip, onSelectClip, onSeek, 
                     {shown ? layerName(project, shown) : "Empty"}
                     {shown && shown.blend && shown.blend !== "normal" ? ` · ${label(shown.blend)}` : ""}
                     {shown && (shown.masks?.length ?? 0) > 0 ? ` · ${shown.masks!.length} mask${shown.masks!.length > 1 ? "s" : ""}` : ""}
-                    {!active && shown ? " · not at playhead" : ""}
+                    {!active && shown && !still ? " · not at playhead" : ""}
                   </span>
                 </div>
                 {below && (
@@ -98,22 +110,37 @@ export function LayersPanel({ project, playhead, selClip, onSelectClip, onSeek, 
               </li>
             );
           })}
+          {still && (
+            <li className={`layer base ${sel ? "" : "selected"}`} onClick={() => onSelectClip(null)} title="The photo with its edits (Adjust, Looks, Crop tabs)">
+              <div className="layer-text">
+                <span className="layer-name">Background</span>
+                <span className="muted small">{project.media[doc!]?.name ?? "Photo"} · edits</span>
+              </div>
+            </li>
+          )}
         </ul>
         <p className="muted small">A matte on a layer cuts the layer below it, and is not drawn itself.</p>
         <div className="row">
+          {still && (
+            <select value="" title="Place another photo of this project as a layer" disabled={images.length === 0}
+              onChange={(e) => e.target.value && addLayer("media", e.target.value)}>
+              <option value="">{images.length ? "+ Image…" : "+ Image (import more photos)"}</option>
+              {images.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
+            </select>
+          )}
           <button onClick={() => addLayer("solid")}>+ Solid</button>
           <button onClick={() => addLayer("adjustment")}>+ Adjustment</button>
-          <button onClick={() => run("track.add", { kind: "overlay" })}>+ Track</button>
+          {!still && <button onClick={() => run("track.add", { kind: "overlay" })}>+ Track</button>}
         </div>
       </div>
 
       {sel ? (
         <>
-          <LayerProps key={sel.clip.id} project={project} clip={sel.clip} track={sel.track} playhead={playhead} run={run} onSeek={onSeek} W={W} H={H} />
+          <LayerProps key={sel.clip.id} project={project} clip={sel.clip} track={sel.track} playhead={playhead} run={run} onSeek={onSeek} W={W} H={H} still={still} looks={looks} />
           <MasksSection clip={sel.clip} run={run} onPen={() => setTool("pen")} />
         </>
       ) : (
-        <p className="muted small">Select a layer to change its blend mode, transform, keyframes and masks.</p>
+        <p className="muted small">Select a layer to change its blend mode, transform{still ? "" : ", keyframes"} and masks.</p>
       )}
     </>
   );
@@ -158,7 +185,8 @@ interface PropDef {
   fmt: (v: number) => string;
 }
 
-function LayerProps({ project, clip, track, playhead, run, onSeek, W, H }: { project: Project; clip: Clip; track: Track; playhead: number; run: RunFn; onSeek: (t: number) => void; W: number; H: number }) {
+function LayerProps({ project, clip, track, playhead, run, onSeek, W, H, still, looks }: { project: Project; clip: Clip; track: Track; playhead: number; run: RunFn; onSeek: (t: number) => void; W: number; H: number; still: boolean; looks?: LookInfo[] }) {
+  const look = clip.ops?.find((o) => o.op === "look");
   const [name, setName] = useState(clip.name ?? "");
   useEffect(() => setName(clip.name ?? ""), [clip.name]);
   const pct = (v: number) => `${(v * 100).toFixed(1)}%`;
@@ -195,7 +223,16 @@ function LayerProps({ project, clip, track, playhead, run, onSeek, W, H }: { pro
             <input type="color" style={{ width: 48 }} value={clip.color ?? "#000000"} disabled={locked} onChange={(e) => run("clip.set_layer", { clip_id: clip.id, color: e.target.value })} />
           </label>
         )}
-        {clip.source === "adjustment" && <p className="muted small">An adjustment layer applies its effects (Clip tab → look) to every layer below it.</p>}
+        {clip.source === "adjustment" && (looks?.length ? (
+          <>
+            <label className="small">Look (applies to every layer below)</label>
+            <select value={look ? String(look.params.name) : ""} disabled={locked}
+              onChange={(e) => run("clip.apply_look", { clip_id: clip.id, name: e.target.value || null })}>
+              <option value="">None</option>
+              {looks.map((l) => <option key={l.name} value={l.name}>{l.title}</option>)}
+            </select>
+          </>
+        ) : <p className="muted small">An adjustment layer applies its effects (Clip tab → look) to every layer below it.</p>)}
         <label className="small">Blend mode</label>
         <select value={clip.blend ?? "normal"} disabled={locked} onChange={(e) => run("clip.set_layer", { clip_id: clip.id, blend: e.target.value })}>
           {BLEND_MODES.map((b) => <option key={b} value={b}>{label(b)}</option>)}
@@ -205,13 +242,13 @@ function LayerProps({ project, clip, track, playhead, run, onSeek, W, H }: { pro
       <div className="group">
         <div className="row between">
           <h4>Transform</h4>
-          <div className="row tools">
+          {!still && <div className="row tools">
             <button className="icon" disabled={prev === undefined} title="Previous keyframe" onClick={() => prev !== undefined && onSeek(prev)}>◀◆</button>
             <button className="icon" disabled={next === undefined} title="Next keyframe" onClick={() => next !== undefined && onSeek(next)}>◆▶</button>
-          </div>
+          </div>}
         </div>
         {defs.map((d) => (
-          <PropRow key={d.p} def={d} clip={clip} playhead={playhead} run={run} disabled={locked} />
+          <PropRow key={d.p} def={d} clip={clip} playhead={playhead} run={run} disabled={locked} still={still} />
         ))}
         <button className="small" disabled={locked} onClick={() => run("clip.set_layer", { clip_id: clip.id, x: 0, y: 0, scale: 1, rotation: 0, anchor_x: 0, anchor_y: 0 })}>
           Reset transform
@@ -230,18 +267,18 @@ function LayerProps({ project, clip, track, playhead, run, onSeek, W, H }: { pro
   );
 }
 
-function PropRow({ def, clip, playhead, run, disabled }: { def: PropDef; clip: Clip; playhead: number; run: RunFn; disabled: boolean }) {
+function PropRow({ def, clip, playhead, run, disabled, still }: { def: PropDef; clip: Clip; playhead: number; run: RunFn; disabled: boolean; still: boolean }) {
   const anim = animated(clip, def.p);
   const here = !!keyAt(clip, def.p, playhead);
   const value = clipValue(clip, def.p, playhead);
   return (
     <div className={`prop ${anim ? "anim" : ""}`}>
-      <button className={`icon stopwatch ${anim ? "on" : ""}`} disabled={disabled} title={anim ? "Stop animating (keeps the current value)" : "Animate: add a keyframe here"}
-        onClick={() => toggleStopwatch(run, clip, def.p, playhead)}>⏱</button>
+      {!still && <button className={`icon stopwatch ${anim ? "on" : ""}`} disabled={disabled} title={anim ? "Stop animating (keeps the current value)" : "Animate: add a keyframe here"}
+        onClick={() => toggleStopwatch(run, clip, def.p, playhead)}>⏱</button>}
       <Slider label={def.label} value={value} min={def.min} max={def.max} step={def.step} fmt={def.fmt} disabled={disabled}
         onCommit={(v) => commitValues(run, clip, { [def.p]: v }, playhead)} />
-      <button className={`icon key ${here ? "on" : ""}`} disabled={disabled || !anim} title={here ? "Remove this keyframe" : "Add a keyframe here"}
-        onClick={() => toggleKeyHere(run, clip, def.p, playhead)}>◆</button>
+      {!still && <button className={`icon key ${here ? "on" : ""}`} disabled={disabled || !anim} title={here ? "Remove this keyframe" : "Add a keyframe here"}
+        onClick={() => toggleKeyHere(run, clip, def.p, playhead)}>◆</button>}
     </div>
   );
 }

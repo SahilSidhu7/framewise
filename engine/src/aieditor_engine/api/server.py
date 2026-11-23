@@ -285,8 +285,9 @@ def create_app(token: str | None = None, automation: JobManager | None = None) -
                 raise HTTPException(422, str(exc)) from exc
         if look:
             stack = [o for o in stack if o["op"] != "look"] + [{"op": "look", "params": {"name": look, "strength": s}}]
+        draw, key = (None, "") if bypass else session.photo_overlay(media_id)
         try:
-            data = render_preview(path, stack, max_side=max)
+            data = render_preview(path, stack, max_side=max, overlay=draw, overlay_key=key)
         except (ValueError, OSError) as exc:
             raise HTTPException(422, str(exc)) from exc
         return Response(data, media_type="image/jpeg", headers={"Cache-Control": "private, max-age=3600"})
@@ -294,9 +295,11 @@ def create_app(token: str | None = None, automation: JobManager | None = None) -
     @app.post("/media/{media_id}/preview", dependencies=secured)
     def preview(media_id: str, body: PreviewBody) -> Response:
         """Render an arbitrary (uncommitted) stack, e.g. while a slider is being dragged."""
-        path, _ = state.require().photo_stack(media_id)
+        session = state.require()
+        path, _ = session.photo_stack(media_id)
+        draw, key = session.photo_overlay(media_id)
         try:
-            data = render_preview(path, body.ops, max_side=body.max)
+            data = render_preview(path, body.ops, max_side=body.max, overlay=draw, overlay_key=key)
         except (ValueError, KeyError, OSError) as exc:
             raise HTTPException(422, str(exc)) from exc
         return Response(data, media_type="image/jpeg")
@@ -318,7 +321,8 @@ def create_app(token: str | None = None, automation: JobManager | None = None) -
         if out.suffix == "":
             out = out.with_suffix({"jpeg": ".jpg", "png": ".png", "tiff": ".tif", "webp": ".webp"}[body.format])
         try:
-            return export_image(path, stack, out, body.format, body.quality, body.bit_depth, body.long_edge)
+            draw, _ = session.photo_overlay(media_id)
+            return export_image(path, stack, out, body.format, body.quality, body.bit_depth, body.long_edge, overlay=draw)
         except (ValueError, OSError) as exc:
             raise HTTPException(422, str(exc)) from exc
 

@@ -11,7 +11,7 @@ import io
 import json
 import threading
 from collections import OrderedDict
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 from pathlib import Path
 from typing import Any, Literal
 
@@ -172,10 +172,22 @@ class _PreviewCache:
 PREVIEWS = _PreviewCache()
 
 
-def render_preview(path: Path, ops: list[dict[str, Any]], max_side: int = 1600, quality: int = 86) -> bytes:
-    key_src = json.dumps([str(path), path.stat().st_mtime_ns, max_side, quality, ops], sort_keys=True, default=str)
+Overlay = Callable[[np.ndarray], np.ndarray]
+
+
+def render_preview(
+    path: Path, ops: list[dict[str, Any]], max_side: int = 1600, quality: int = 86,
+    overlay: Overlay | None = None, overlay_key: str = "",
+) -> bytes:
+    """`overlay` draws a photo's layers over the edited picture (imaging.photo_layers)."""
+    key_src = json.dumps([str(path), path.stat().st_mtime_ns, max_side, quality, ops, overlay_key], sort_keys=True, default=str)
     key = hashlib.sha1(key_src.encode()).hexdigest()
-    return PREVIEWS.get_or_render(key, lambda: encode_jpeg(apply_stack(SOURCES.get(path, max_side), ops), quality))
+
+    def render() -> bytes:
+        img = apply_stack(SOURCES.get(path, max_side), ops)
+        return encode_jpeg(overlay(img) if overlay else img, quality)
+
+    return PREVIEWS.get_or_render(key, render)
 
 
 ExportFormat = Literal["jpeg", "png", "tiff", "webp"]
@@ -189,9 +201,12 @@ def export_image(
     quality: int = 95,
     bit_depth: Literal[8, 16] = 8,
     long_edge: int | None = None,
+    overlay: Overlay | None = None,
 ) -> dict[str, Any]:
-    """Full-resolution render from the original file."""
+    """Full-resolution render from the original file (with the photo's layers on top)."""
     img = apply_stack(load_linear(path), ops)
+    if overlay:
+        img = overlay(img)
     if long_edge and max(img.shape[:2]) > long_edge:
         s = long_edge / max(img.shape[:2])
         img = cv2.resize(img, None, fx=s, fy=s, interpolation=cv2.INTER_AREA)

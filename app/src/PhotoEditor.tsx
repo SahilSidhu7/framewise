@@ -8,11 +8,16 @@ import {
   type ExportOptions,
   type LookInfo,
   type MediaItem,
+  type Clip,
+  type Project,
   type Snapshot,
 } from "./engine";
+import { LayersPanel, type Tool } from "./layers/LayersPanel";
+import { ViewerOverlay } from "./layers/ViewerOverlay";
+import { applyValues, commitValues, replaceClip, type RunFn as LayerRun, type Values } from "./layers/edit";
 import { PhotoSubjectControls, SubjectModelNote, SubjectOutline, pointOnImage, setPhotoSubject } from "./Subject";
 
-type Tab = "ai" | "looks" | "adjust" | "crop" | "edits";
+type Tab = "ai" | "looks" | "adjust" | "crop" | "layers" | "edits";
 
 interface SliderSpec {
   op: string;
@@ -134,6 +139,10 @@ export function PhotoEditor({ client, snapshot, item, onNotice }: Props) {
   const [picking, setPicking] = useState(false);
   const [aspect, setAspect] = useState(1.5);
   const imgRef = useRef<HTMLImageElement>(null);
+  const [selLayer, setSelLayer] = useState<string | null>(null);
+  const [tool, setTool] = useState<Tool>("move");
+  const [layerDraft, setLayerDraft] = useState<Clip | null>(null);
+  const [looks, setLooks] = useState<LookInfo[]>([]);
   const previewSeq = useRef(0);
   const timer = useRef<number | undefined>(undefined);
 
@@ -161,6 +170,48 @@ export function PhotoEditor({ client, snapshot, item, onNotice }: Props) {
     },
     [client, onNotice],
   );
+  // layer commands return their result (the new clip id)
+  const runLayer: LayerRun = useCallback(
+    async (name, params) => {
+      try {
+        return (await client.run(name, params)).result;
+      } catch (e) {
+        onNotice(e instanceof Error ? e.message : String(e));
+        return undefined;
+      }
+    },
+    [client, onNotice],
+  );
+
+  useEffect(() => {
+    if (tab === "layers" && looks.length === 0) client.looks().then(setLooks, () => undefined);
+  }, [tab, client, looks.length]);
+  useEffect(() => setLayerDraft(null), [snapshot.revision, selLayer]);
+  useEffect(() => setSelLayer(null), [item.id]);
+
+  // The photo as a layer document: its layer tracks on a canvas the shape of the
+  // edited photo, sized like the original (positions are fractions of it).
+  const doc: Project = useMemo(() => {
+    const p = snapshot.project;
+    const long = Math.max(item.width ?? 1600, item.height ?? 1600);
+    const [w, h] = aspect >= 1 ? [long, Math.round(long / aspect)] : [Math.round(long * aspect), long];
+    return { ...p, settings: { ...p.settings, width: w, height: h }, tracks: p.layers?.[item.id] ?? [] };
+  }, [snapshot.project, item, aspect]);
+  const selEntry = selLayer ? doc.tracks.flatMap((track) => track.clips.map((clip) => ({ track, clip }))).find((e) => e.clip.id === selLayer) : undefined;
+  const shownDoc = layerDraft ? replaceClip(doc, layerDraft) : doc;
+  const overlayClip = tab === "layers" && !compare && selEntry && !selEntry.track.hidden ? shownDoc.tracks.flatMap((t) => t.clips).find((c) => c.id === selLayer) : undefined;
+
+  useEffect(() => {
+    if (tab !== "layers") return;
+    const onKey = (e: KeyboardEvent) => {
+      const el = e.target as HTMLElement;
+      if (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.tagName === "SELECT") return;
+      if (e.key === "v" || e.key === "V") setTool("move");
+      else if ((e.key === "p" || e.key === "P") && selLayer) setTool("pen");
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [tab, selLayer]);
 
   const schedulePreview = useCallback(
     (ops: EditOp[]) => {
@@ -264,6 +315,28 @@ export function PhotoEditor({ client, snapshot, item, onNotice }: Props) {
           {tab === "adjust" && (picking || stack.some((o) => o.op === "subject")) && !compare && (
             <SubjectOutline client={client} item={item} point={String(stack.find((o) => o.op === "subject")?.params.point ?? "auto")} aspect={aspect} />
           )}
+          {overlayClip && selEntry && (
+            <div className="photo-overlay">
+              <ViewerOverlay
+                project={shownDoc}
+                clip={overlayClip}
+                t={0}
+                tool={tool}
+                locked={!!selEntry.track.locked}
+                onDraft={(d) => {
+                  if (!d) return setLayerDraft(null);
+                  setLayerDraft(d.masks ? { ...selEntry.clip, masks: d.masks } : applyValues(selEntry.clip, d.values ?? {}, 0));
+                }}
+                onCommit={async (v: Values) => {
+                  await commitValues(runLayer, selEntry.clip, v, 0);
+                }}
+                onMasks={async (masks) => {
+                  await runLayer("clip.set_masks", { clip_id: selEntry.clip.id, masks });
+                }}
+                onPenDone={() => setTool("move")}
+              />
+            </div>
+          )}
           {picking && <div className="pick-hint">Click the subject</div>}
           {!loaded && !draftUrl && <div className="spinner" />}
         </div>
@@ -271,7 +344,7 @@ export function PhotoEditor({ client, snapshot, item, onNotice }: Props) {
 
       <aside className="photo-panel">
         <nav className="tabs">
-          {(["ai", "looks", "adjust", "crop", "edits"] as Tab[]).map((t) => (
+          {(["ai", "looks", "adjust", "crop", "layers", "edits"] as Tab[]).map((t) => (
             <button key={t} className={tab === t ? "active" : ""} onClick={() => setTab(t)}>
               {t === "ai" ? "Auto edit" : t[0].toUpperCase() + t.slice(1)}
             </button>
@@ -292,6 +365,20 @@ export function PhotoEditor({ client, snapshot, item, onNotice }: Props) {
               </section>
             ))}
           {tab === "crop" && <CropPanel item={item} stack={stack} run={run} />}
+          {tab === "layers" && (
+            <LayersPanel
+              project={doc}
+              playhead={0}
+              selClip={selLayer}
+              onSelectClip={setSelLayer}
+              onSeek={() => undefined}
+              run={runLayer}
+              tool={tool}
+              setTool={setTool}
+              doc={item.id}
+              looks={looks}
+            />
+          )}
           {tab === "edits" && <EditsPanel item={item} stack={stack} run={run} />}
         </div>
       </aside>

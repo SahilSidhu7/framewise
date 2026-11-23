@@ -95,8 +95,9 @@ def media_remove(p: Project, a: MediaRemoveParams) -> dict:
         raise CommandError(f"media not found: {a.media_id}")
     del p.media[a.media_id]
     p.edits.pop(a.media_id, None)
+    p.layers.pop(a.media_id, None)
     removed = 0
-    for track in p.tracks:
+    for track in p.all_tracks():
         before = len(track.clips)
         track.clips = [c for c in track.clips if c.media_id != a.media_id]
         removed += before - len(track.clips)
@@ -127,12 +128,20 @@ def media_set_subject(p: Project, a: MediaSubjectParams) -> dict:
 class TrackAddParams(BaseModel):
     kind: Literal["video", "audio", "overlay"] = "video"
     name: str = ""
+    doc: str | None = Field(None, description="Photo media_id: add to that photo's layer stack")
 
 
 @command("track.add", TrackAddParams, "Add a timeline track.", "timeline")
 def track_add(p: Project, a: TrackAddParams) -> dict:
-    track = Track(id=new_id("trk"), kind=a.kind, name=a.name or f"{a.kind.title()} {len(p.tracks) + 1}")
-    p.tracks.append(track)
+    if a.doc is not None:
+        doc = p.media.get(a.doc)
+        if doc is None or doc.kind != MediaKind.IMAGE:
+            raise CommandError(f"photo not found: {a.doc}")
+        if a.kind == "audio":
+            raise CommandError("a photo has no audio tracks")
+    stack = p.layers.setdefault(a.doc, []) if a.doc is not None else p.tracks
+    track = Track(id=new_id("trk"), kind=a.kind, name=a.name or (f"Layer {len(stack) + 1}" if a.doc else f"{a.kind.title()} {len(stack) + 1}"))
+    stack.append(track)
     return {"track_id": track.id}
 
 

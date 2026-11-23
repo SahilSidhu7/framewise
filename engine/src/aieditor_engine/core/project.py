@@ -363,6 +363,9 @@ class Project(BaseModel):
     tracks: list[Track] = Field(default_factory=list)
     edits: dict[str, list[EditOp]] = Field(default_factory=dict, description="media_id -> photo edit stack")
     grade: list[EditOp] = Field(default_factory=list, description="Video: look/color stack over the whole timeline")
+    layers: dict[str, list[Track]] = Field(
+        default_factory=dict, description="Photo: media_id -> layer tracks drawn over the edited photo (bottom first)"
+    )
     captions: list[Caption] = Field(default_factory=list)
     markers: list[Marker] = Field(default_factory=list)
 
@@ -378,14 +381,27 @@ class Project(BaseModel):
         end = self.content_end
         return end + self.settings.end_card_seconds if self.settings.end_card and end > 0 else end
 
+    def all_tracks(self) -> list[Track]:
+        """Timeline tracks, then every photo's layer tracks."""
+        return [*self.tracks, *(t for stack in self.layers.values() for t in stack)]
+
+    def stack_of(self, track: Track) -> list[Track]:
+        """The list a track lives in: the timeline or one photo's layers."""
+        if any(t is track for t in self.tracks):
+            return self.tracks
+        for stack in self.layers.values():
+            if any(t is track for t in stack):
+                return stack
+        raise KeyError(f"track not found: {track.id}")
+
     def find_track(self, track_id: str) -> Track:
-        for track in self.tracks:
+        for track in self.all_tracks():
             if track.id == track_id:
                 return track
         raise KeyError(f"track not found: {track_id}")
 
     def find_clip(self, clip_id: str) -> tuple[Track, Clip]:
-        for track in self.tracks:
+        for track in self.all_tracks():
             for clip in track.clips:
                 if clip.id == clip_id:
                     return track, clip

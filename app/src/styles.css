@@ -193,6 +193,8 @@ textarea { font: inherit; color: var(--text); background: var(--bg-2); border: 1
 .photo-canvas { flex: 1; min-height: 0; display: grid; place-items: center; position: relative; padding: 16px; overflow: hidden; }
 .photo-canvas img { position: absolute; inset: 20px; width: calc(100% - 40px); height: calc(100% - 40px); object-fit: contain; transition: opacity .15s; user-select: none; -webkit-user-drag: none; }
 .photo-canvas img.loading { opacity: .55; }
+.photo-overlay { position: absolute; inset: 20px; z-index: 3; pointer-events: none; }
+.layer.base { cursor: default; border-top: 1px dashed rgba(255,255,255,.12); }
 .spinner { position: absolute; width: 24px; height: 24px; border-radius: 50%; border: 2px solid #ffffff22; border-top-color: var(--text-2); animation: spin .8s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
 

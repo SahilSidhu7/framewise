@@ -325,10 +325,14 @@ def _adjust(clip: Clip, canvas: np.ndarray, t: float, w: int, h: int, seed: int)
     return composite(canvas, fx * (alpha[..., None] if isinstance(alpha, np.ndarray) else alpha), alpha, clip.blend)
 
 
-def composite_tracks(project: Project, t: float, w: int, h: int, src: RenderSource, seed: int) -> np.ndarray:
-    """All picture tracks, bottom to top, as one linear-light canvas."""
-    canvas: np.ndarray | None = None
-    tracks = [tr for tr in project.tracks if tr.kind != "audio"]
+def composite_tracks(
+    project: Project, t: float, w: int, h: int, src: RenderSource, seed: int,
+    tracks: list[Track] | None = None, base: np.ndarray | None = None,
+) -> np.ndarray:
+    """All picture tracks, bottom to top, as one linear-light canvas. `tracks`
+    and `base` draw another stack (a photo's layers) over a given picture."""
+    canvas: np.ndarray | None = base
+    tracks = [tr for tr in (project.tracks if tracks is None else tracks) if tr.kind != "audio"]
     skip: set[int] = set()
     for i, track in enumerate(tracks):  # bottom to top
         if i in skip or track.hidden:
