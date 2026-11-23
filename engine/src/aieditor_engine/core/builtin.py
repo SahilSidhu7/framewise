@@ -176,12 +176,12 @@ class ClipTrimParams(BaseModel):
 @command("clip.trim", ClipTrimParams, "Change a clip's source in/out points.", "timeline")
 def clip_trim(p: Project, a: ClipTrimParams) -> None:
     _, clip = p.find_clip(a.clip_id)
-    media = p.media[clip.media_id]
+    media = p.media.get(clip.media_id)  # None for solid and adjustment layers: any length
     new_in = a.in_point if a.in_point is not None else clip.in_point
     new_out = a.out_point if a.out_point is not None else clip.out_point
     if new_out <= new_in:
         raise CommandError("out_point must be after in_point")
-    if media.kind != MediaKind.IMAGE and media.duration and new_out > media.duration + 1e-6:
+    if media is not None and media.kind != MediaKind.IMAGE and media.duration and new_out > media.duration + 1e-6:
         raise CommandError(f"out_point {new_out} beyond media duration {media.duration}")
     clip.in_point, clip.out_point = new_in, new_out
     if a.start is not None:

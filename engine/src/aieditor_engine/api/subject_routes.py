@@ -162,7 +162,7 @@ def register(app: FastAPI, require, secured: list) -> None:  # noqa: ANN001 - Fa
             _, clip = project.find_clip(clip_id)
         except KeyError as exc:
             raise HTTPException(404, "clip not found") from exc
-        track = session.subject_track(clip.media_id)
+        track = None if clip.generated else session.subject_track(clip.media_id)
         if not track:
             raise HTTPException(422, "only video clips can follow a subject")
         s = project.settings

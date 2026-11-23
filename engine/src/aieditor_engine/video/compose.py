@@ -2,10 +2,12 @@
 
 Pipeline per frame (linear-light float32, like the photo engine):
     for each video/overlay track, bottom to top:
-        active clip(s) -> decode -> fit/fill + motion + transform/crop -> clip ops
-        -> opacity and fades (premultiplied alpha); keyframes animate these
+        active clip(s) -> decode (or a solid colour) -> fit/fill + motion + transform/crop -> clip ops
+        -> masks, opacity and fades (premultiplied alpha); keyframes animate these
         transitions blend the outgoing and incoming clip around the cut
-        the layer is composited on the tracks below with its blend mode
+        a track with a matte is cut by the track above it (which is then not drawn)
+        an adjustment layer runs its effects on everything below it
+        the layer is composited on the tracks below with its blend mode (video/layers.py)
     -> project grade (look/adjust/grain...)  -> letterbox -> global fades
     -> sRGB + dither (8-bit) -> captions/titles
 
@@ -24,11 +26,11 @@ import cv2
 import numpy as np
 
 from ..core.project import Clip, MediaKind, Project, Track
-from ..imaging.color import linear_to_srgb, srgb_to_linear
 from ..imaging.ops import OPS
 from ..imaging.render import SOURCES, apply_stack, make_context
 from .decode import READERS, u8_to_linear
 from .fastgrade import PLANS, encode_u8
+from .layers import composite, hex_to_linear, masks_coverage, matte_value, multiply_alpha
 from .text import draw_text
 
 
@@ -78,7 +80,7 @@ def _matrix(clip: Clip, t: float, sw: int, sh: int, w: int, h: int) -> tuple[np.
     if k != 1 or rot or ox or oy:
         th = math.radians(rot)
         c, sn = math.cos(th) * k, math.sin(th) * k
-        cx, cy = w / 2, h / 2
+        cx, cy = w / 2 + clip.value("anchor_x", t) * w, h / 2 + clip.value("anchor_y", t) * h  # pivot
         u = np.array([[c, -sn, cx - c * cx + sn * cy + ox], [sn, c, cy - sn * cx - c * cy + oy]])
         m = np.hstack([u[:, :2] @ m[:, :2], (u[:, :2] @ m[:, 2] + u[:, 2])[:, None]])
     covers = bool(
@@ -144,7 +146,37 @@ def _max_scale(clip: Clip) -> float:
     return max([k.value for k in keys]) if keys else clip.transform.scale
 
 
+def _layer_alpha(clip: Clip, t: float) -> float:
+    a = min(1.0, max(0.0, clip.value("opacity", t)))
+    if clip.fade_in > 0:
+        a = min(a, max(0.0, (t - clip.start) / clip.fade_in))
+    if clip.fade_out > 0:
+        a = min(a, max(0.0, (clip.end - t) / clip.fade_out))
+    return a
+
+
+def _shape(clip: Clip, t: float, sw: int, sh: int, w: int, h: int, cover: np.ndarray | None) -> np.ndarray | None:
+    """Coverage of the placed layer (edges, crop) times its masks; None = everywhere."""
+    if not any(m.enabled for m in clip.masks):
+        return cover
+    masks = masks_coverage(clip.masks, sw, sh, _matrix(clip, t, sw, sh, w, h)[0], w, h)
+    if masks is None:
+        return cover
+    return masks if cover is None else cover * masks
+
+
 def clip_frame(project: Project, clip: Clip, t: float, w: int, h: int, src: RenderSource, seed: int) -> tuple[np.ndarray, Alpha]:
+    if clip.source == "solid":
+        img = np.empty((h, w, 3), np.float32)
+        img[:] = hex_to_linear(clip.color)
+        sh, sw = h, w
+        img, cover = _place(img, clip, t, w, h)
+        a = _layer_alpha(clip, t)
+        cover = _shape(clip, t, sw, sh, w, h, cover)
+        if cover is not None:
+            alpha = cover * a
+            return img * alpha[..., None], alpha
+        return (img * a, a) if a < 1 else (img, 1.0)
     item = project.media[clip.media_id]
     if item.kind == MediaKind.IMAGE:
         img = SOURCES.get(Path(item.path), int(max(w, h) * 1.15 * min(4.0, max(1.0, _max_scale(clip)))))
@@ -163,15 +195,13 @@ def clip_frame(project: Project, clip: Clip, t: float, w: int, h: int, src: Rend
         size = _decode_size(reader_probe.width, reader_probe.height, w, h, clip.fit, zoom_max)
         reader = READERS.get(path, size, src.channel) if size else reader_probe
         img = u8_to_linear(reader.frame_at(clip.source_time(t)))
+    sh, sw = img.shape[:2]
     img, cover = _place(img, clip, t, w, h)
     ops = [o.model_dump(mode="json") for o in clip.ops if not OPS[o.op].geometry and OPS[o.op].category != "subject"]
     if ops:
         img = apply_stack(img, ops, make_context(seed))
-    a = min(1.0, max(0.0, clip.value("opacity", t)))
-    if clip.fade_in > 0:
-        a = min(a, max(0.0, (t - clip.start) / clip.fade_in))
-    if clip.fade_out > 0:
-        a = min(a, max(0.0, (clip.end - t) / clip.fade_out))
+    a = _layer_alpha(clip, t)
+    cover = _shape(clip, t, sw, sh, w, h, cover)
     if cover is not None:
         alpha = cover * a if a < 1 else cover
         return img * alpha[..., None], alpha
@@ -273,28 +303,53 @@ def track_frame(
     return None
 
 
-def _composite(canvas: np.ndarray | None, img: np.ndarray, alpha: Alpha, blend: str) -> np.ndarray:
-    """Put one layer (premultiplied picture + alpha) on top of the canvas."""
-    if canvas is None:
-        if blend in ("normal", "add", "screen"):
-            return img  # over black these all leave just the layer
-        canvas = np.zeros_like(img)
-    a3: Any = alpha[..., None] if isinstance(alpha, np.ndarray) else alpha
-    if blend == "normal":
-        if isinstance(alpha, float) and alpha >= 1.0:
-            return img
-        return canvas * (1.0 - a3) + img
-    if blend == "add":
-        return canvas + img
-    if blend == "screen":
-        return canvas + img - np.clip(canvas, 0, 1) * np.clip(img, 0, 1)
-    if blend == "multiply":
-        return canvas * (1.0 - a3) + canvas * img
-    # overlay: contrast blend, done on display-encoded values like other editors
-    cg = linear_to_srgb(np.clip(canvas, 0, 1))
-    sg = linear_to_srgb(np.clip(img / np.maximum(a3, 1e-4), 0, 1))
-    ov = np.where(cg < 0.5, 2 * cg * sg, 1 - 2 * (1 - cg) * (1 - sg))
-    return (canvas * (1.0 - a3) + srgb_to_linear(ov.astype(np.float32)) * a3).astype(np.float32)
+def _active(track: Track, t: float) -> Clip | None:
+    for clip in track.clips:
+        if clip.start <= t < clip.end:
+            return clip
+    return None
+
+
+def _adjust(clip: Clip, canvas: np.ndarray, t: float, w: int, h: int, seed: int) -> np.ndarray:
+    """Adjustment layer: its effects run on everything below, inside its shape and opacity."""
+    ops = [o.model_dump(mode="json") for o in clip.ops if not OPS[o.op].geometry and OPS[o.op].category != "subject"]
+    a = _layer_alpha(clip, t)
+    if not ops or a <= 0:
+        return canvas
+    _, cover = _place(np.ones((h, w, 3), np.float32), clip, t, w, h)
+    cover = _shape(clip, t, w, h, w, h, cover)
+    fx = apply_stack(canvas, ops, make_context(seed))
+    if cover is None and a >= 1 and clip.blend == "normal":
+        return fx
+    alpha: Alpha = cover * a if cover is not None else a
+    return composite(canvas, fx * (alpha[..., None] if isinstance(alpha, np.ndarray) else alpha), alpha, clip.blend)
+
+
+def composite_tracks(project: Project, t: float, w: int, h: int, src: RenderSource, seed: int) -> np.ndarray:
+    """All picture tracks, bottom to top, as one linear-light canvas."""
+    canvas: np.ndarray | None = None
+    tracks = [tr for tr in project.tracks if tr.kind != "audio"]
+    skip: set[int] = set()
+    for i, track in enumerate(tracks):  # bottom to top
+        if i in skip or track.hidden:
+            continue
+        matte_track = tracks[i + 1] if track.matte and i + 1 < len(tracks) else None
+        if matte_track is not None:
+            skip.add(i + 1)  # a matte is not drawn itself
+        active = _active(track, t)
+        if active is not None and active.source == "adjustment":
+            canvas = _adjust(active, canvas if canvas is not None else np.zeros((h, w, 3), np.float32), t, w, h, seed)
+            continue
+        layer = track_frame(project, track, t, w, h, src, seed)
+        if layer is None:
+            continue
+        img, alpha, blend = layer
+        if matte_track is not None and track.matte:
+            m = track_frame(project, matte_track, t, w, h, src, seed)
+            v = matte_value(m[0], m[1], track.matte, h, w) if m is not None else (1.0 if track.matte.endswith("inverted") else 0.0)
+            img, alpha = multiply_alpha(img, alpha, v, h, w)
+        canvas = composite(canvas, img, alpha, blend)
+    return canvas if canvas is not None else np.zeros((h, w, 3), dtype=np.float32)
 
 
 def render_frame(
@@ -306,15 +361,7 @@ def render_frame(
     content_end = project.content_end
     if project.settings.end_card and t >= content_end > 0:
         return _end_card(project, t, w, h, src, content_end)
-    canvas: np.ndarray | None = None
-    for track in project.tracks:  # bottom to top
-        if track.kind == "audio" or track.hidden:
-            continue
-        layer = track_frame(project, track, t, w, h, src, seed)
-        if layer is not None:
-            canvas = _composite(canvas, *layer)
-    if canvas is None:
-        canvas = np.zeros((h, w, 3), dtype=np.float32)
+    canvas = composite_tracks(project, t, w, h, src, seed)
     grade = [o.model_dump(mode="json") for o in project.grade if not OPS[o.op].geometry and OPS[o.op].category != "subject"]
     frame = PLANS.get(grade).finish(canvas, seed)
     s = project.settings

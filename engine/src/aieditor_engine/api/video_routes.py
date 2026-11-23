@@ -238,7 +238,7 @@ def register(app: FastAPI, require, secured: list) -> None:  # noqa: ANN001 - Fa
             raise HTTPException(409, "speech recognition is not installed")
         with session.bus.lock:
             ids = {c.media_id for t in session.bus.project.tracks for c in t.clips
-                   if session.bus.project.media[c.media_id].kind == MediaKind.VIDEO}
+                   if c.media_id in session.bus.project.media and session.bus.project.media[c.media_id].kind == MediaKind.VIDEO}
         if not ids:
             raise HTTPException(422, "no videos on the timeline")
 

@@ -23,9 +23,15 @@ above the main video at a timeline time:
     overlay 5 0-4 at=2 scale=0.3 x=0.32 y=-0.3      # picture-in-picture, top right
     overlay 6 at=1 blend=screen opacity=0.8         # light leak / effect layer
     overlay 7 at=0 opacity=0:0,0.5:1,3:1,3.5:0      # keyframes as time:value
+    overlay 3 at=0 mask=ellipse:0.5,0.5,0.3,0.4 feather=0.05   # soft oval vignette cut-out
+    solid #101820 at=0 dur=5 opacity=0.4 blend=multiply          # colour layer
 
 x / y are fractions of the canvas (0 = centre), rotate is in degrees, crop is
-left,top,right,bottom fractions. Any of x y scale rotate opacity volume takes
+left,top,right,bottom fractions, anchor=x,y moves the pivot for scale and
+rotation. blend takes any Photoshop mode (multiply, screen, overlay, soft_light,
+color_dodge, difference, hue, luminosity, ...). mask= is rect:l,t,r,b,
+ellipse:cx,cy,rx,ry or path:x,y;x,y;... in layer fractions (a leading ! inverts
+it), with feather= and expand= as fractions of the canvas's short side. Any of x y scale rotate opacity volume takes
 a number, `from>to` (animated across the clip) or `t:v,t:v,...` keyframes.
 
 Media are referenced by their 1-based position in the media bin (or by id).
@@ -40,11 +46,14 @@ import shlex
 from typing import Any
 
 from ..core.project import (
+    BLEND_MODES,
     Caption,
     Clip,
     Crop,
     EditOp,
     Keyframe,
+    Mask,
+    MaskPoint,
     MediaKind,
     Project,
     Track,
@@ -59,9 +68,9 @@ ASPECTS = {"16:9": (1920, 1080), "9:16": (1080, 1920), "1:1": (1080, 1080), "4:5
 TRANSITIONS = ("crossfade", "fade_black", "fade_white", "wipe_left", "wipe_right", "slide_left", "slide_up", "zoom", "blur")
 MOTIONS = ("none", "zoom_in", "zoom_out", "pan_left", "pan_right")
 CAPTION_STYLES = ("clean", "bold_pop", "cinematic", "boxed", "title", "minimal")
-BLENDS = ("normal", "add", "screen", "multiply", "overlay")
+BLENDS = BLEND_MODES
 VIDEO_STATEMENTS = ("aspect", "clip", "overlay", "music", "letterbox", "fade_in", "fade_out", "title", "text", "captions", "transition", "fps",
-                    "progress_bar", "end_card")
+                    "progress_bar", "end_card", "solid")
 POSITIONS = ("bottom", "center", "top", "lower_third", "center_low", "high")
 STILL_SECONDS = 3.0
 
@@ -86,7 +95,7 @@ def _tokens(stmt: str) -> list[str]:
     except ValueError as exc:
         raise VideoDslError(f"`{stmt}`: {exc}") from exc
     for i, tok in enumerate(toks):
-        if tok.startswith("#"):
+        if tok.startswith("#") and not re.fullmatch(r"#[0-9a-fA-F]{6}", tok):  # a colour is not a comment
             return toks[:i]
     return toks
 
@@ -173,6 +182,15 @@ def _apply_layer(clip: Clip, kv: dict[str, str]) -> None:
         if kv["blend"] not in BLENDS:
             raise VideoDslError(f"blend must be one of {', '.join(BLENDS)}")
         clip.blend = kv["blend"]  # type: ignore[assignment]
+    if "anchor" in kv:
+        parts = kv["anchor"].split(",")
+        if len(parts) != 2:
+            raise VideoDslError("anchor needs x,y (fractions from the centre, e.g. -0.3,0.2)")
+        clip.transform.anchor_x, clip.transform.anchor_y = (_num(x, "anchor", -4, 4) for x in parts)
+    if "mask" in kv:
+        clip.masks = [_mask(kv["mask"], kv)]
+    elif "feather" in kv or "expand" in kv:
+        raise VideoDslError("feather= and expand= need a mask=")
     if "crop" in kv:
         parts = kv["crop"].split(",")
         if len(parts) != 4:
@@ -181,6 +199,50 @@ def _apply_layer(clip: Clip, kv: dict[str, str]) -> None:
         if left + right >= 0.98 or top + bottom >= 0.98:
             raise VideoDslError("crop removes the whole picture")
         clip.crop = Crop(left=left, top=top, right=right, bottom=bottom)
+
+
+def _mask(raw: str, kv: dict[str, str]) -> Mask:
+    inverted = raw.startswith("!")
+    kind, _, args = raw.lstrip("!").partition(":")
+    extra = {"inverted": inverted, "feather": _num(kv.get("feather", "0"), "feather", 0, 0.5),
+             "expansion": _num(kv.get("expand", "0"), "expand", -0.5, 0.5)}
+    try:
+        if kind == "rect":
+            left, top, right, bottom = (float(v) for v in args.split(","))
+            if right <= left or bottom <= top:
+                raise VideoDslError("mask=rect needs left<right and top<bottom")
+            return Mask.rect(left, top, right, bottom, **extra)
+        if kind == "ellipse":
+            cx, cy, rx, ry = (float(v) for v in args.split(","))
+            if rx <= 0 or ry <= 0:
+                raise VideoDslError("mask=ellipse needs positive radii")
+            return Mask.ellipse(cx, cy, rx, ry, **extra)
+        if kind == "path":
+            pts = []
+            for part in args.split(";"):
+                v = [float(x) for x in part.split(",")]
+                if len(v) not in (2, 6):
+                    raise ValueError
+                pts.append(MaskPoint(x=v[0], y=v[1]) if len(v) == 2 else
+                           MaskPoint(x=v[0], y=v[1], in_x=v[2], in_y=v[3], out_x=v[4], out_y=v[5]))
+            return Mask(points=pts, **extra)
+    except (ValueError, TypeError) as exc:
+        raise VideoDslError(f"bad mask `{raw}`: {exc}" if str(exc) else f"bad mask `{raw}`") from exc
+    raise VideoDslError("mask must be rect:l,t,r,b, ellipse:cx,cy,rx,ry or path:x,y;x,y;...")
+
+
+def _mask_dsl(m: Mask) -> list[str]:
+    pts = ";".join(
+        ",".join(_fmt(v) for v in ((p.x, p.y) if not (p.in_x or p.in_y or p.out_x or p.out_y)
+                                   else (p.x, p.y, p.in_x, p.in_y, p.out_x, p.out_y)))
+        for p in m.points
+    )
+    parts = [f"mask={'!' if m.inverted else ''}path:{pts}"]
+    if m.feather:
+        parts.append(f"feather={_fmt(m.feather)}")
+    if m.expansion:
+        parts.append(f"expand={_fmt(m.expansion)}")
+    return parts
 
 
 def _layer_dsl(c: Clip) -> list[str]:
@@ -196,6 +258,11 @@ def _layer_dsl(c: Clip) -> list[str]:
             parts.append(f"{name}={_fmt(value)}")
     if c.blend != "normal":
         parts.append(f"blend={c.blend}")
+    if c.transform.anchor_x or c.transform.anchor_y:
+        parts.append(f"anchor={_fmt(c.transform.anchor_x)},{_fmt(c.transform.anchor_y)}")
+    masks = [m for m in c.masks if m.enabled]
+    if masks:
+        parts += _mask_dsl(masks[0])  # the DSL carries one mask; more are kept by the editor
     if not c.crop.is_empty:
         parts.append("crop=" + ",".join(_fmt(v) for v in (c.crop.left, c.crop.top, c.crop.right, c.crop.bottom)))
     return parts
@@ -297,6 +364,22 @@ def apply_video_program(
                     video.clips.append(clip)
                     added_clips.append(clip)
                     cursor = clip.end
+            elif name == "solid":
+                color = (pos[0] if pos else kv.get("color", "")).lower()
+                if not re.fullmatch(r"#[0-9a-f]{6}", color):
+                    raise VideoDslError("solid needs a colour like #1a2b3c")
+                at = _num(kv.get("at", "0"), "at", 0)
+                dur = _num(kv.get("dur", "5"), "dur", 0.1, 36000)
+                clip = Clip(id=new_id("clp"), source="solid", color=color, start=at, in_point=0.0, out_point=dur, name="Solid")
+                if "fade" in kv:
+                    clip.fade_in = clip.fade_out = min(_num(kv["fade"], "fade", 0, 30), dur / 2)
+                _apply_layer(clip, kv)
+                layer = _num(kv.get("track", "1"), "track", 1, 8)
+                target = _track(p, "overlay", f"Overlay {int(layer)}")
+                if any(c.start < clip.end and clip.start < c.end for c in target.clips):
+                    raise VideoDslError(f"overlaps another clip on overlay track {int(layer)}; use track={int(layer) + 1}")
+                target.clips.append(clip)
+                target.clips.sort(key=lambda c: c.start)
             elif name == "music":
                 if not pos:
                     raise VideoDslError("music needs a media number")
@@ -458,7 +541,12 @@ def timeline_to_dsl(p: Project) -> str:
             continue
         layer = t.name.rsplit(" ", 1)[-1] if t.name.startswith("Overlay ") else "1"
         for c in t.clips:
-            parts = [f"overlay {num.get(c.media_id, c.media_id)} {_fmt(c.in_point)}-{_fmt(c.out_point)} at={_fmt(c.start)}"]
+            if c.source == "adjustment":
+                continue  # edited in the app; the DSL has no adjustment layers yet
+            if c.source == "solid":
+                parts = [f"solid {c.color} at={_fmt(c.start)} dur={_fmt(c.duration)}"]
+            else:
+                parts = [f"overlay {num.get(c.media_id, c.media_id)} {_fmt(c.in_point)}-{_fmt(c.out_point)} at={_fmt(c.start)}"]
             if layer != "1":
                 parts.append(f"track={layer}")
             if abs(c.speed - 1) > 1e-6:

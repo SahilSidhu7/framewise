@@ -19,7 +19,10 @@ from .project import (
     Clip,
     EditOp,
     Keyframe,
+    LayerSource,
     Marker,
+    Mask,
+    MatteMode,
     Motion,
     Project,
     Track,
@@ -354,8 +357,12 @@ class ClipLayerParams(BaseModel):
     y: float | None = Field(None, ge=-4, le=4, description="Offset down, fraction of canvas height")
     scale: float | None = Field(None, gt=0, le=20)
     rotation: float | None = Field(None, ge=-3600, le=3600, description="Degrees, clockwise")
+    anchor_x: float | None = Field(None, ge=-4, le=4, description="Pivot right of the canvas centre, fraction of width")
+    anchor_y: float | None = Field(None, ge=-4, le=4, description="Pivot below the canvas centre, fraction of height")
     opacity: float | None = Field(None, ge=0, le=1)
     blend: BlendMode | None = None
+    name: str | None = Field(None, max_length=80)
+    color: str | None = Field(None, pattern=r"^#[0-9a-fA-F]{6}$", description="Solid layers")
     crop_left: float | None = Field(None, ge=0, le=0.95)
     crop_top: float | None = Field(None, ge=0, le=0.95)
     crop_right: float | None = Field(None, ge=0, le=0.95)
@@ -365,14 +372,14 @@ class ClipLayerParams(BaseModel):
 @command("clip.set_layer", ClipLayerParams, "Place a clip as a layer: position, size, rotation, opacity, blend mode, crop.", "timeline")
 def clip_set_layer(p: Project, a: ClipLayerParams) -> None:
     _, clip = p.find_clip(a.clip_id)
-    for key in ("x", "y", "scale", "rotation"):
+    for key in ("x", "y", "scale", "rotation", "anchor_x", "anchor_y"):
         value = getattr(a, key)
         if value is not None:
             setattr(clip.transform, key, value)
-    if a.opacity is not None:
-        clip.opacity = a.opacity
-    if a.blend is not None:
-        clip.blend = a.blend
+    for key in ("opacity", "blend", "name", "color"):
+        value = getattr(a, key)
+        if value is not None:
+            setattr(clip, key, value)
     for side in ("left", "top", "right", "bottom"):
         value = getattr(a, f"crop_{side}")
         if value is not None:
@@ -395,13 +402,58 @@ def clip_set_keyframes(p: Project, a: KeyframesParams) -> None:
     if not a.keys:
         clip.keyframes.pop(a.param, None)
         return
-    limits = {"opacity": (0.0, 1.0), "volume": (0.0, 4.0), "scale": (0.01, 20.0), "x": (-4.0, 4.0), "y": (-4.0, 4.0)}
+    limits = {"opacity": (0.0, 1.0), "volume": (0.0, 4.0), "scale": (0.01, 20.0), "x": (-4.0, 4.0), "y": (-4.0, 4.0),
+              "anchor_x": (-4.0, 4.0), "anchor_y": (-4.0, 4.0)}
     lo, hi = limits.get(a.param, (-3600.0, 3600.0))
     keys = sorted(a.keys, key=lambda k: k.t)
     for k in keys:
         if not lo <= k.value <= hi:
             raise CommandError(f"{a.param} must be between {lo:g} and {hi:g}")
+        if k.ease == "bezier" and k.bezier is not None and not (0 <= k.bezier[0] <= 1 and 0 <= k.bezier[2] <= 1):
+            raise CommandError("bezier handles need x1 and x2 between 0 and 1")
     clip.keyframes[a.param] = keys
+
+
+class MasksParams(BaseModel):
+    clip_id: str
+    masks: list[Mask] = Field(description="The layer's masks, top to bottom (replaces them); empty removes all")
+
+
+@command("clip.set_masks", MasksParams, "Cut a layer with bezier masks (add, subtract, intersect, feather, expand).", "timeline")
+def clip_set_masks(p: Project, a: MasksParams) -> None:
+    _, clip = p.find_clip(a.clip_id)
+    if len(a.masks) > 32:
+        raise CommandError("at most 32 masks per layer")
+    clip.masks = [m.model_copy(deep=True) for m in a.masks]
+
+
+class LayerAddParams(BaseModel):
+    source: LayerSource = Field(description="solid (a colour) or adjustment (effects on everything below)")
+    start: float = Field(0.0, ge=0)
+    duration: float = Field(5.0, gt=0, le=36000)
+    color: str = Field("#000000", pattern=r"^#[0-9a-fA-F]{6}$")
+    name: str = Field("", max_length=80)
+    track_id: str | None = Field(None, description="Default: a new overlay track on top")
+
+
+@command("layer.add", LayerAddParams, "Add a solid colour or adjustment layer on its own track (or a given one).", "timeline")
+def layer_add(p: Project, a: LayerAddParams) -> dict:
+    if a.source == "media":
+        raise CommandError("use clip.add for media")
+    if a.track_id:
+        track = p.find_track(a.track_id)
+        if track.kind == "audio":
+            raise CommandError("layers go on a video or overlay track")
+        if any(c.start < a.start + a.duration and a.start < c.end for c in track.clips):
+            raise CommandError("overlaps another clip on that track")
+    else:
+        track = Track(id=new_id("trk"), kind="overlay", name="Adjustment" if a.source == "adjustment" else "Solid")
+        p.tracks.append(track)
+    clip = Clip(id=new_id("clp"), source=a.source, start=a.start, in_point=0.0, out_point=a.duration,
+                color=a.color, name=a.name or ("Adjustment layer" if a.source == "adjustment" else "Solid"))
+    track.clips.append(clip)
+    track.clips.sort(key=lambda c: c.start)
+    return {"clip_id": clip.id, "track_id": track.id}
 
 
 class TrackSetParams(BaseModel):
@@ -410,16 +462,19 @@ class TrackSetParams(BaseModel):
     muted: bool | None = None
     hidden: bool | None = None
     locked: bool | None = None
+    matte: MatteMode | Literal["none"] | None = Field(None, description="Cut this track by the track above it; none removes it")
     index: int | None = Field(None, ge=0, description="New position in the stack (0 = bottom)")
 
 
-@command("track.set", TrackSetParams, "Rename, mute, hide, lock or reorder a track.", "timeline")
+@command("track.set", TrackSetParams, "Rename, mute, hide, lock, matte or reorder a track.", "timeline")
 def track_set(p: Project, a: TrackSetParams) -> None:
     track = p.find_track(a.track_id)
     for key in ("name", "muted", "hidden", "locked"):
         value = getattr(a, key)
         if value is not None:
             setattr(track, key, value)
+    if a.matte is not None:
+        track.matte = None if a.matte == "none" else a.matte
     if a.index is not None:
         p.tracks.remove(track)
         p.tracks.insert(min(a.index, len(p.tracks)), track)

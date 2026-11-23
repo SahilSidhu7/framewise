@@ -24,6 +24,8 @@ MIGRATIONS: dict[int, Callable[[dict[str, Any]], dict[str, Any]]] = {
     # v1 -> v2: layer fields, track flags and markers were added; all have defaults,
     # so old documents are valid as they are.
     1: lambda raw: raw,
+    # v2 -> v3: blend modes, masks, mattes, anchor, bezier keys, solid/adjustment layers; all defaulted.
+    2: lambda raw: raw,
 }
 
 

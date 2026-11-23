@@ -511,7 +511,7 @@ def test_v1_project_migrates_to_layers():
     raw = {"schema_version": 1, "name": "old", "kind": "video", "tracks": [{"id": "t1", "kind": "video", "clips": [clip]}]}
     p = Project.model_validate(migrate(raw))
     c = p.tracks[0].clips[0]
-    assert p.schema_version == SCHEMA_VERSION == 2 and not c.is_layered and c.blend == "normal" and c.opacity == 1 and p.markers == []
+    assert p.schema_version == SCHEMA_VERSION == 3 and not c.is_layered and c.blend == "normal" and c.opacity == 1 and p.markers == []
 
 
 def test_export_parallelism_fits_memory(monkeypatch):
